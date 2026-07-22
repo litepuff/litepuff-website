@@ -29,6 +29,7 @@ export const env = {
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASSWORD || '',
   mailFrom: process.env.MAIL_FROM || '',
+  resendApiKey: process.env.RESEND_API_KEY || '',
   emailLogoUrl: process.env.EMAIL_LOGO_URL || '',
   adminNotifyEmail: process.env.ADMIN_NOTIFY_EMAIL || process.env.ADMIN_EMAIL || '',
   razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
@@ -72,6 +73,7 @@ export function validateProductionEnv() {
   if (env.nodeEnv === 'production' && new Set([env.jwtSecret, env.jwtRefreshSecret, env.cookieSecret, env.otpSecret]).size !== 4) throw new Error('Authentication secrets must be independent values.');
   if (env.nodeEnv === 'production' && !env.adminEmail) throw new Error('ADMIN_EMAIL is required in production.');
   if (env.nodeEnv === 'production' && !env.adminPasswordHash) throw new Error('ADMIN_PASSWORD_HASH is required in production; plaintext ADMIN_PASSWORD is not permitted.');
+  if (env.nodeEnv === 'production' && env.adminPasswordHash && !/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(env.adminPasswordHash)) throw new Error('ADMIN_PASSWORD_HASH must be a valid bcrypt hash.');
   if (env.nodeEnv === 'production') { const invalidUrls = Object.entries({ FRONTEND_URL: env.clientUrl, BACKEND_URL: env.backendUrl, APP_URL: env.appUrl }).filter(([, value]) => !/^https:\/\//i.test(value) || /localhost|127\.0\.0\.1/i.test(value)).map(([key]) => key); if (invalidUrls.length) throw new Error(`Production URLs must use public HTTPS origins: ${invalidUrls.join(', ')}`); }
   if (!Number.isFinite(env.accessTokenMinutes) || env.accessTokenMinutes <= 0) throw new Error('ACCESS_TOKEN_MINUTES must be a positive number.');
   if (!Number.isFinite(env.refreshTokenDays) || env.refreshTokenDays <= 0) throw new Error('REFRESH_TOKEN_DAYS must be a positive number.');

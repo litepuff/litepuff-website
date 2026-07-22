@@ -70,7 +70,7 @@ fs.mkdirSync(uploadFolder, { recursive: true });
 validateProductionEnv();
 ensureFrontendBuild();
 
-if (!env.smtpHost || !env.smtpUser || !env.smtpPass) logger.warn('integration.email.disabled', { reason: 'not-configured' });
+if (!env.resendApiKey && (!env.smtpHost || !env.smtpUser || !env.smtpPass)) logger.warn('integration.email.disabled', { reason: 'not-configured' });
 if (whatsAppConfig.configured) logger.info('integration.whatsapp.configured', { apiVersion: whatsAppConfig.metaApiVersion, webhookConfigured: whatsAppConfig.webhookConfigured });
 else logger.warn('integration.whatsapp.disabled', { reason: whatsAppConfig.disabledReason, missing: whatsAppConfig.validation.missing, invalid: whatsAppConfig.validation.invalid });
 
@@ -111,15 +111,11 @@ app.use('/api', productionRoutes);
 
 app.use('/api', notFoundHandler);
 
-console.log('DIST EXISTS:', fs.existsSync(distIndex));
-console.log('DIST PATH:', distFolder);
-console.log('CURRENT DIRECTORY:', __dirname);
-if (fs.existsSync(distFolder)) console.log('DIST CONTENTS:', fs.readdirSync(distFolder));
 if (fs.existsSync(distIndex)) {
   app.use(express.static(distFolder, { maxAge: env.nodeEnv === 'production' ? '1y' : 0, index: false }));
   app.get('*', (request, response) => response.sendFile(path.join(distFolder, 'index.html')));
 } else {
-  console.error('DIST FOLDER NOT FOUND');
+  logger.error('frontend.dist.missing', { distFolder });
 }
 
 // Central error handler keeps API errors consistent and production safe.

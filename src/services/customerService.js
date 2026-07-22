@@ -68,5 +68,6 @@ export const customerService = {
 };
 
 export function apiMessage(error) {
-  return error.response?.data?.error || error.response?.data?.message || error.message || 'Something went wrong. Please try again.';
+  if (!error?.response) return 'We could not connect to LitePuff. Check your connection and try again.';
+  return error.response.data?.error || error.response.data?.message || 'Something went wrong. Please try again.';
 }

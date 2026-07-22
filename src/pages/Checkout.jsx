@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -18,6 +18,7 @@ import { useCustomerAuth } from "../context/CustomerAuthContext.jsx";
 import { apiMessage, customerService } from "../services/customerService.js";
 import { formatMoney } from "../utils/formatMoney.js";
 import { useToast } from "../context/ToastContext.jsx";
+import { useOrderPricing } from "../hooks/useOrderPricing.js";
 
 const paymentMethods = [
   {
@@ -129,18 +130,9 @@ export default function Checkout() {
   const [paymentFailure, setPaymentFailure] = useState(null);
   const checkoutForm = useRef(null);
 
-  const totals = useMemo(() => {
-    const shipping = cartTotal >= 498 ? 0 : 29;
-    const normalizedCoupon = coupon.trim().toUpperCase();
-    const discount = normalizedCoupon === "LITEPUFF10" ? Math.round(cartTotal * 0.1) : normalizedCoupon === "PUFFFIRST" ? Math.min(49, cartTotal) : 0;
-    return {
-      subtotal: cartTotal,
-      shipping,
-      discount,
-      tax: 0,
-      grandTotal: cartTotal + shipping - discount,
-    };
-  }, [cartTotal, coupon]);
+  const estimatedTotals = useOrderPricing(cartItems);
+  const [serverPricing, setServerPricing] = useState(null);
+  const totals = serverPricing || estimatedTotals;
 
   const onAddressChange = (event) =>
     setAddress((current) => ({
@@ -197,6 +189,7 @@ export default function Checkout() {
       }
       await loadRazorpay();
       const payment = await customerService.createRazorpayOrder(payload);
+      setServerPricing(payment.pricing || null);
       let confirmed;
       let confirmedPayment;
       await new Promise((resolve, reject) => {
@@ -539,6 +532,9 @@ export default function Checkout() {
                   label="Subtotal"
                   value={formatMoney(totals.subtotal)}
                 />
+                <SummaryRow label="Product Discount" value={totals.productDiscount ? `-${formatMoney(totals.productDiscount)}` : "—"} />
+                {totals.firstOrderDiscount > 0 && <SummaryRow label="First Order Discount (10%)" value={`-${formatMoney(totals.firstOrderDiscount)}`} />}
+                {totals.couponDiscount > 0 && <SummaryRow label={`Coupon${coupon ? ` (${coupon.toUpperCase()})` : ""}`} value={`-${formatMoney(totals.couponDiscount)}`} />}
                 <SummaryRow
                   label="Shipping"
                   value={
@@ -546,7 +542,7 @@ export default function Checkout() {
                   }
                 />
                 <SummaryRow
-                  label="Discount"
+                  label="Total Savings"
                   value={
                     totals.discount ? `-${formatMoney(totals.discount)}` : "—"
                   }

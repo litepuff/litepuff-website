@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
+import fs from 'fs/promises';
 
 let transporter;
 
@@ -29,6 +30,12 @@ function layout(title, body) {
 }
 
 export async function sendMail({ to, subject, html, attachments = [] }) {
+  if (env.resendApiKey && to) {
+    const resendAttachments = await Promise.all(attachments.map(async (attachment) => ({ filename: attachment.filename, content: (await fs.readFile(attachment.path)).toString('base64') })));
+    const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${env.resendApiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: env.mailFrom, to: [to], subject, html, attachments: resendAttachments }) });
+    if (!response.ok) { const error = new Error('Email delivery is temporarily unavailable.'); error.status = 503; error.code = 'EMAIL_DELIVERY_FAILED'; throw error; }
+    return response.json();
+  }
   const client = mailer();
   if (!client || !to) {
     logger.warn('integration.email.skipped', { reason: !client ? 'not-configured' : 'recipient-missing' });
@@ -50,6 +57,10 @@ export const emailTemplates = {
     subject: `LitePuff order ${order.OrderNumber || order.orderNumber}: ${status}`,
     html: layout(`Order ${status}`, `<p>Your order <strong>${order.OrderNumber || order.orderNumber}</strong> is now <strong>${status}</strong>.</p><p>You can track it from your LitePuff account.</p>`)
   }),
+  welcome: (customer = {}) => ({ subject: 'Welcome to LitePuff', html: layout('Welcome to LitePuff', `<p>Hello ${customer.FirstName || customer.firstName || 'there'}, your account is ready.</p>`) }),
+  signup: (customer = {}) => ({ subject: 'Your LitePuff account is ready', html: layout('Account Created', `<p>Welcome ${customer.FirstName || customer.firstName || 'to LitePuff'}. You can now manage orders, addresses and preferences.</p>`) }),
+  orderConfirmation: (order) => ({ subject: `LitePuff order ${order.OrderNumber || order.orderNumber} confirmed`, html: layout('Order Confirmed', `<p>Your order <strong>${order.OrderNumber || order.orderNumber}</strong> is confirmed.</p><p>Grand total: <strong>Rs. ${order.GrandTotal || order.grandTotal}</strong></p>`) }),
+  refund: (order, status = 'Refund processed') => ({ subject: `Refund update for ${order.OrderNumber || order.orderNumber}`, html: layout('Refund Update', `<p>${status} for order <strong>${order.OrderNumber || order.orderNumber}</strong>.</p>`) }),
   newsletter: (email) => ({
     subject: 'Welcome to LitePuff stories',
     html: layout('You are subscribed', `<p>${email}, you will now receive LitePuff launches, recipes and snack inspiration.</p>`)

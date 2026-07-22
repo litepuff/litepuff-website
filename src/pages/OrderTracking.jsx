@@ -195,22 +195,16 @@ export default function OrderTracking() {
                     <Row label="Payment Status" value={order.paymentStatus} />
                     <Row label="Transaction ID" value={order.transactionId} />
                     <Row label="Subtotal" value={formatMoney(order.subtotal)} />
+                    <Row label="Product Discount" value={order.productDiscount ? `-${formatMoney(order.productDiscount)}` : "—"} />
+                    {order.firstOrderDiscount > 0 && <Row label="First Order Discount (10%)" value={`-${formatMoney(order.firstOrderDiscount)}`} />}
+                    {order.couponDiscount > 0 && <Row label={`Coupon${order.couponCode ? ` (${order.couponCode})` : ""}`} value={`-${formatMoney(order.couponDiscount)}`} />}
                     <Row
                       label="Shipping"
                       value={
                         order.shipping ? formatMoney(order.shipping) : "FREE"
                       }
                     />
-                    {order.discount > 0 && (
-                      <Row
-                        label={
-                          order.couponCode
-                            ? `Discount (${order.couponCode})`
-                            : "Discount"
-                        }
-                        value={`-${formatMoney(order.discount)}`}
-                      />
-                    )}
+                    <Row label="Tax" value="Included" />
                     <Row
                       label="Grand Total"
                       value={formatMoney(order.grandTotal)}

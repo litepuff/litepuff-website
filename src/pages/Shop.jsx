@@ -82,7 +82,7 @@ export default function Shop() {
   }, [debouncedSearch, flavourFilter, priceFilter, stockFilter, sortBy]);
 
   const activeChips = [flavourFilter !== 'all' && { label: flavourFilter, clear: () => setFlavourFilter('all') }, priceFilter !== 'all' && { label: '₹200–₹300', clear: () => setPriceFilter('all') }, stockFilter !== 'all' && { label: 'In Stock', clear: () => setStockFilter('all') }].filter(Boolean);
-  const handleAdd = (product) => addToCart({ ...product, images: [product.image], description: product.shortDescription });
+  const handleAdd = (product) => addToCart({ ...product, originalPrice: Math.ceil(product.price / 0.9), images: [product.image], description: product.shortDescription });
 
   return <><Seo title="Shop" description="Shop LitePuff roasted makhana and preview upcoming healthy snacks." path="/products" /><main className="bg-[#FAF8F2] pb-10 md:pb-16"><motion.header className="mx-auto max-w-7xl px-6 pb-7 pt-10 text-center md:pt-14 lg:px-8 lg:pt-16" initial="hidden" animate="visible" variants={fadeUp}><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C9A227]">Shop LitePuff</p><h1 className="mt-3 font-display text-[40px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[50px]">Discover Your Everyday Crunch</h1><p className="mx-auto mt-4 max-w-[600px] text-base leading-7 text-[#5F6762]">Premium roasted makhana in bold, balanced flavours for better everyday snacking.</p></motion.header><div className="mx-auto max-w-[1440px] px-6 lg:px-8"><ShopOfferRibbon /></div>
 

@@ -43,6 +43,7 @@ export const failurePaymentValidators = [
 ];
 
 const locks = new Map();
+const checkoutLocks = new Map();
 const remarks = (value) => {
   try {
     return JSON.parse(value || "{}");
@@ -74,6 +75,13 @@ async function withPaymentLock(paymentId, task) {
   const promise = task().finally(() => locks.delete(paymentId));
   locks.set(paymentId, promise);
   return promise;
+}
+
+async function withCheckoutLock(customerId, task) {
+  const prior = checkoutLocks.get(customerId) || Promise.resolve();
+  const current = prior.catch(() => {}).then(task);
+  checkoutLocks.set(customerId, current);
+  return current.finally(() => { if (checkoutLocks.get(customerId) === current) checkoutLocks.delete(customerId); });
 }
 
 async function finalizePayment({
@@ -155,7 +163,7 @@ async function finalizePayment({
   });
 }
 
-export async function createPaymentOrder(request, response) {
+async function createPaymentOrderUnlocked(request, response) {
   const paymentId = createId("payment");
   const snapshot = await buildCheckoutIntent({
     customerId: request.customer.id,
@@ -188,6 +196,9 @@ export async function createPaymentOrder(request, response) {
     Gateway: gateway.gateway,
     Remarks: encodeRemarks({
       checkoutToken,
+      firstOrderReserved: snapshot.firstOrderEligible,
+      checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      pricing: { subtotal: snapshot.subtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal },
       message: "Payment checkout created.",
     }),
   });
@@ -202,12 +213,15 @@ export async function createPaymentOrder(request, response) {
       keyId: gateway.keyId,
       mode: gateway.mode,
       checkoutToken,
+      pricing: { subtotal: snapshot.subtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, discount: snapshot.discount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal, firstOrderEligible: snapshot.firstOrderEligible },
     },
     "Secure payment prepared.",
   );
 }
 
-export async function createCashOnDeliveryOrder(request, response) {
+export function createPaymentOrder(request, response) { return withCheckoutLock(request.customer.id, () => createPaymentOrderUnlocked(request, response)); }
+
+async function createCashOnDeliveryOrderUnlocked(request, response) {
   const paymentId = createId("payment");
   const snapshot = await buildCheckoutIntent({
     customerId: request.customer.id,
@@ -230,7 +244,7 @@ export async function createCashOnDeliveryOrder(request, response) {
     PaidAt: "",
     TransactionReference: paymentId,
     Gateway: "Cash on Delivery",
-    Remarks: encodeRemarks({ message: "Creating Cash on Delivery order." }),
+    Remarks: encodeRemarks({ firstOrderReserved: snapshot.firstOrderEligible, checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(), pricing: { subtotal: snapshot.subtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal }, message: "Creating Cash on Delivery order." }),
   });
   const payment = await findRow(
     "PAYMENTS",
@@ -245,6 +259,8 @@ export async function createCashOnDeliveryOrder(request, response) {
     "Cash on Delivery order confirmed.",
   );
 }
+
+export function createCashOnDeliveryOrder(request, response) { return withCheckoutLock(request.customer.id, () => createCashOnDeliveryOrderUnlocked(request, response)); }
 
 export async function verifyPayment(request, response) {
   if (!verifyRazorpaySignature(request.body))

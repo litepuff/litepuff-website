@@ -11,6 +11,9 @@ import { ok, created } from "../utils/apiResponse.js";
 import { createId } from "../utils/createId.js";
 import { slugify } from "../utils/slugify.js";
 import { customerBusinessService } from "../services/business/CustomerService.js";
+import { notificationService } from "../services/NotificationService.js";
+import { AppError } from "../utils/AppError.js";
+import { logger } from "../utils/logger.js";
 
 const now = () => new Date().toISOString();
 const money = (value) => Number(Number(value || 0).toFixed(2));
@@ -98,6 +101,9 @@ const orderDto = (row, customer = null, items = [], payment = null) => ({
   customer,
   items,
   subtotal: Number(row.Subtotal || 0),
+  productDiscount: Number(row.ProductDiscount || 0),
+  firstOrderDiscount: Number(row.FirstOrderDiscount || 0),
+  couponDiscount: Number(row.CouponDiscount || 0),
   shipping: Number(row.Shipping || 0),
   discount: Number(row.Discount || 0),
   tax: Number(row.Tax || 0),
@@ -118,22 +124,33 @@ const orderDto = (row, customer = null, items = [], payment = null) => ({
 });
 
 export async function adminLogin(request, response) {
-  const { email, password } = request.body;
-  const passwordMatches = env.adminPasswordHash
-    ? await bcrypt.compare(String(password || ""), env.adminPasswordHash)
-    : password === env.adminPassword;
-  if (
-    String(email || "")
-      .trim()
-      .toLowerCase() !== env.adminEmail.trim().toLowerCase() ||
-    !passwordMatches
-  ) {
-    return response
-      .status(401)
-      .json({ success: false, message: "Invalid admin credentials." });
+  const email = String(request.body?.email || "").trim().toLowerCase();
+  const password = String(request.body?.password || "");
+  if (!email || !password) throw new AppError("Email and password are required.", { status: 422, code: "VALIDATION_ERROR", expose: true });
+  if (!env.adminEmail || !env.adminPasswordHash || !env.jwtSecret) {
+    logger.error("auth.admin.configuration-invalid", { requestId: request.id, emailConfigured: Boolean(env.adminEmail), passwordHashConfigured: Boolean(env.adminPasswordHash), jwtConfigured: Boolean(env.jwtSecret) });
+    throw new AppError("Admin authentication is not configured.", { status: 503, code: "ADMIN_AUTH_NOT_CONFIGURED", expose: true });
   }
-  const admin = adminProfile(email);
-  const token = jwt.sign(admin, env.jwtSecret, { expiresIn: "7d" });
+  const emailMatches = email === env.adminEmail.trim().toLowerCase();
+  let passwordMatches = false;
+  try {
+    passwordMatches = await bcrypt.compare(password, env.adminPasswordHash);
+  } catch (error) {
+    logger.error("auth.admin.password-verification-failed", { requestId: request.id, error: error.message });
+    throw new AppError("Admin authentication is temporarily unavailable.", { status: 503, code: "ADMIN_AUTH_UNAVAILABLE", expose: true, cause: error });
+  }
+  if (!emailMatches || !passwordMatches) {
+    logger.warn("auth.admin.login-rejected", { requestId: request.id, reason: !emailMatches ? "email-mismatch" : "password-mismatch" });
+    throw new AppError("The email or password is incorrect.", { status: 401, code: "INVALID_ADMIN_CREDENTIALS", expose: true });
+  }
+  const admin = adminProfile(env.adminEmail);
+  let token;
+  try { token = jwt.sign(admin, env.jwtSecret, { algorithm: "HS256", expiresIn: "7d" }); }
+  catch (error) {
+    logger.error("auth.admin.token-generation-failed", { requestId: request.id, error: error.message });
+    throw new AppError("Admin authentication is temporarily unavailable.", { status: 503, code: "ADMIN_AUTH_UNAVAILABLE", expose: true, cause: error });
+  }
+  logger.info("auth.admin.login-succeeded", { requestId: request.id, role: admin.role });
   ok(response, { admin, token }, "Admin signed in successfully.");
 }
 
@@ -526,6 +543,7 @@ export async function updateAdminOrderStatus(request, response) {
     UpdatedAt: row.UpdatedAt,
     EstimatedDeliveryDate: row.EstimatedDelivery,
   });
+  await notificationService.orderStatus(row, row.OrderStatus).catch(() => {});
   ok(response, { order: orderDto(row) }, "Order status updated.");
 }
 

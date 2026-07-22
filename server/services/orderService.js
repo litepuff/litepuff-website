@@ -17,7 +17,7 @@ function normalizeAddress(address = {}) {
       address.fullName ||
       address.name ||
       `${address.firstName || ""} ${address.lastName || ""}`.trim(),
-    phone: String(address.phone || "").replace(/\s/g, ""),
+    phone: String(address.phone || "").replace(/\D/g, "").slice(-10),
     addressLine1:
       address.addressLine1 || address.addressLine || address.address1,
     addressLine2: address.addressLine2 || address.address2 || "",
@@ -46,12 +46,13 @@ function normalizeAddress(address = {}) {
 }
 
 function normalizeItems(items = []) {
-  return items
+  const normalized = items
     .map((item) => ({
       productId: String(item.productId || item.id || "").trim(),
-      quantity: Math.max(1, Math.floor(Number(item.quantity || 1))),
+      quantity: Math.min(100, Math.max(1, Math.floor(Number(item.quantity || 1)))),
     }))
     .filter((item) => item.productId);
+  return [...normalized.reduce((map, item) => map.set(item.productId, { productId: item.productId, quantity: (map.get(item.productId)?.quantity || 0) + item.quantity }), new Map()).values()];
 }
 
 async function pricedCart(customerId, requestedItems = []) {
@@ -74,15 +75,45 @@ async function pricedCart(customerId, requestedItems = []) {
     );
     if (!product || Number(product.Stock || 0) < item.quantity)
       throw httpError("One or more cart items are unavailable.", 409);
-    const price = money(product.DiscountPrice || product.Price);
+    const originalPrice = money(product.Price);
+    const salePrice = Number(product.DiscountPrice || 0);
+    const price = salePrice > 0 && salePrice < originalPrice ? money(salePrice) : originalPrice;
     return {
       productId: product.ProductID,
       productName: product.Name,
       price,
+      originalPrice,
+      productDiscount: money((originalPrice - price) * item.quantity),
       quantity: item.quantity,
       total: money(price * item.quantity),
     };
   });
+}
+
+const successfulOrder = (order) => String(order.PaymentStatus).toLowerCase() === "paid" || ["completed", "delivered"].includes(String(order.OrderStatus).toLowerCase());
+const paymentRemarks = (value) => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
+
+async function firstOrderEligibility(customerId, paymentId) {
+  const orders = await getRows("ORDERS");
+  if (orders.some((order) => order.CustomerID === customerId && successfulOrder(order))) return false;
+  const now = Date.now();
+  const payments = await getRows("PAYMENTS");
+  return !payments.some((payment) => {
+    if (payment.CustomerID !== customerId || payment.PaymentID === paymentId || ["Paid", "Failed", "Refunded"].includes(payment.Status)) return false;
+    const metadata = paymentRemarks(payment.Remarks);
+    return metadata.firstOrderReserved === true && new Date(metadata.checkoutExpiresAt || 0).getTime() > now;
+  });
+}
+
+export function calculateOrderPricing({ items, couponDiscount = 0, freeShipping = false, firstOrderEligible = false }) {
+  const subtotal = money(items.reduce((sum, item) => sum + Number(item.originalPrice) * Number(item.quantity), 0));
+  const productDiscount = money(items.reduce((sum, item) => sum + Number(item.productDiscount || 0), 0));
+  const discountedSubtotal = money(subtotal - productDiscount);
+  const firstOrderDiscount = firstOrderEligible ? money(discountedSubtotal * 0.10) : 0;
+  const shipping = freeShipping || discountedSubtotal >= 498 ? 0 : 29;
+  const normalizedCouponDiscount = money(couponDiscount);
+  const discount = money(productDiscount + firstOrderDiscount + normalizedCouponDiscount);
+  return { subtotal, productDiscount, discountedSubtotal, firstOrderDiscount, couponDiscount: normalizedCouponDiscount, shipping, discount, tax: 0, grandTotal: money(Math.max(0, subtotal - discount + shipping)) };
 }
 
 async function priceCoupon(code, subtotal, customerId) {
@@ -138,22 +169,19 @@ export async function buildCheckoutIntent({
   paymentId,
 }) {
   const pricedItems = await pricedCart(customerId, items);
-  const subtotal = money(
-    pricedItems.reduce((sum, item) => sum + item.total, 0),
-  );
-  const coupon = await priceCoupon(couponCode, subtotal, customerId);
-  const shipping = coupon.freeShipping || subtotal >= 498 ? 0 : 29;
+  const preliminary = calculateOrderPricing({ items: pricedItems });
+  const { discountedSubtotal } = preliminary;
+  const coupon = await priceCoupon(couponCode, discountedSubtotal, customerId);
+  const firstOrderEligible = await firstOrderEligibility(customerId, paymentId);
+  const pricing = calculateOrderPricing({ items: pricedItems, couponDiscount: coupon.discount, freeShipping: coupon.freeShipping, firstOrderEligible });
   const snapshot = {
     paymentId,
     customerId,
     address: normalizeAddress(address),
     items: pricedItems,
     couponCode: coupon.code,
-    subtotal,
-    shipping,
-    discount: coupon.discount,
-    tax: 0,
-    grandTotal: money(subtotal + shipping - coupon.discount),
+    ...pricing,
+    firstOrderEligible,
     currency: "INR",
   };
   return snapshot;
@@ -203,7 +231,9 @@ async function nextTrackingId() {
   return `LP${year}${String(Math.max(0, ...numbers) + 1).padStart(5, "0")}`;
 }
 
-async function materializeOrder({
+let orderWriteQueue = Promise.resolve();
+
+async function materializeOrderUnlocked({
   payment,
   snapshot,
   razorpayPaymentId = "",
@@ -262,6 +292,9 @@ async function materializeOrder({
       CustomerID: snapshot.customerId,
       AddressID: addressId,
       Subtotal: revalidated.subtotal,
+      ProductDiscount: revalidated.productDiscount,
+      FirstOrderDiscount: revalidated.firstOrderDiscount,
+      CouponDiscount: revalidated.couponDiscount,
       Shipping: revalidated.shipping,
       Discount: revalidated.discount,
       Tax: revalidated.tax,
@@ -353,6 +386,12 @@ async function materializeOrder({
   });
   await updateRow("PAYMENTS", payment._row, payment);
   return order;
+}
+
+function materializeOrder(options) {
+  const operation = orderWriteQueue.catch(() => {}).then(() => materializeOrderUnlocked(options));
+  orderWriteQueue = operation.catch(() => {});
+  return operation;
 }
 
 export function materializePaidOrder(options) {

@@ -32,7 +32,7 @@ export default function Cart() {
                   {cartItems.map((item) => <CartItem key={item.id} item={item} onUpdateQuantity={updateQuantity} onRemove={(id) => updateQuantity(id, 0)} />)}
                 </AnimatePresence>
               </div>
-              <CartSummary subtotal={cartTotal} />
+              <CartSummary subtotal={cartTotal} items={cartItems} />
             </div>
           ) : (
             <div className="mt-10"><EmptyCart /></div>

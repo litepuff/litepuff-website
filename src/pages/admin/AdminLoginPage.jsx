@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 export default function AdminLoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: 'admin@everydaymakhana.com', password: 'admin123' });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,8 +18,14 @@ export default function AdminLoginPage() {
     try {
       await login(formData.email, formData.password);
       navigate('/admin/dashboard');
-    } catch {
-      setError('Invalid admin login. Check your email and password.');
+    } catch (requestError) {
+      const code = requestError.response?.data?.code;
+      const messages = {
+        ADMIN_AUTH_NOT_CONFIGURED: 'Admin authentication is not configured on the server. Contact the site administrator.',
+        ADMIN_AUTH_UNAVAILABLE: 'Admin authentication is temporarily unavailable. Please try again shortly.',
+        RATE_LIMITED: 'Too many sign-in attempts. Please wait before trying again.'
+      };
+      setError(messages[code] || requestError.response?.data?.error || 'The email or password is incorrect.');
     } finally {
       setLoading(false);
     }
@@ -37,11 +43,11 @@ export default function AdminLoginPage() {
           <div className="mt-6 grid gap-4">
             <label className="grid gap-2 text-sm font-bold text-brand-text">
               Email
-              <input className="rounded-2xl border border-brand-border bg-brand-background px-4 py-3 outline-none transition focus:border-brand-primary" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} />
+              <input className="rounded-2xl border border-brand-border bg-brand-background px-4 py-3 outline-none transition focus:border-brand-primary" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} type="email" name="email" autoComplete="username" required />
             </label>
             <label className="grid gap-2 text-sm font-bold text-brand-text">
               Password
-              <input className="rounded-2xl border border-brand-border bg-brand-background px-4 py-3 outline-none transition focus:border-brand-primary" value={formData.password} onChange={(event) => setFormData({ ...formData, password: event.target.value })} type="password" />
+              <input className="rounded-2xl border border-brand-border bg-brand-background px-4 py-3 outline-none transition focus:border-brand-primary" value={formData.password} onChange={(event) => setFormData({ ...formData, password: event.target.value })} type="password" name="password" autoComplete="current-password" required />
             </label>
             <button disabled={loading} className="rounded-2xl bg-brand-primary px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 disabled:opacity-60">{loading ? 'Signing in...' : 'Sign In'}</button>
           </div>
