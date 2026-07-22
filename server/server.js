@@ -76,6 +76,8 @@ app.use('/api', notFoundHandler);
 
 console.log('DIST EXISTS:', fs.existsSync(distFolder));
 console.log('DIST PATH:', distFolder);
+console.log('CURRENT DIRECTORY:', __dirname);
+if (fs.existsSync(distFolder)) console.log('DIST CONTENTS:', fs.readdirSync(distFolder));
 if (fs.existsSync(distFolder)) {
   app.use(express.static(distFolder, { maxAge: env.nodeEnv === 'production' ? '1y' : 0, index: false }));
   app.get('*', (request, response) => response.sendFile(path.join(distFolder, 'index.html')));

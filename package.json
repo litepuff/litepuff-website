@@ -10,6 +10,7 @@
     "build": "vite build",
     "test:server": "node --test server/tests/businessServices.test.js server/tests/authCore.test.js server/tests/emailAuth.test.js server/tests/whatsappAuth.test.js server/tests/accountManagement.test.js server/tests/authorization.test.js",
     "preview": "vite preview",
+    "prestart": "npm run build",
     "start": "node server/server.js",
     "server": "node server/server.js",
     "server:dev": "nodemon server/server.js",
@@ -37,6 +38,8 @@
     "lucide-react": "^1.24.0",
     "multer": "^2.0.2",
     "nodemailer": "^9.0.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
     "pdfkit": "^0.19.1",
     "razorpay": "^2.9.6",
     "react": "^18.3.1",
@@ -51,8 +54,6 @@
     "vite": "^6.0.7"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.20",
-    "nodemon": "^3.1.9",
-    "postcss": "^8.4.49"
+    "nodemon": "^3.1.9"
   }
 }
