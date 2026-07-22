@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { env, validateProductionEnv } from './config/env.js';
 import authRoutes from './routes/authRoutes.js';
@@ -29,11 +30,39 @@ import { AppError } from './utils/AppError.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const projectFolder = path.join(__dirname, '..');
 const uploadFolder = path.join(__dirname, 'uploads');
-const distFolder = path.join(__dirname, '..', 'dist');
+const distFolder = path.join(projectFolder, 'dist');
+const distIndex = path.join(distFolder, 'index.html');
+
+function ensureFrontendBuild() {
+  if (fs.existsSync(distIndex)) return;
+
+  const viteEntry = path.join(projectFolder, 'node_modules', 'vite', 'bin', 'vite.js');
+  if (!fs.existsSync(viteEntry)) {
+    throw new Error('Frontend build is missing and Vite is not installed. Ensure production dependencies are installed before startup.');
+  }
+
+  logger.warn('frontend.build.missing', { distFolder });
+  const result = spawnSync(process.execPath, [viteEntry, 'build'], {
+    cwd: projectFolder,
+    env: process.env,
+    encoding: 'utf8',
+    timeout: 180_000
+  });
+
+  if (result.error || result.status !== 0 || !fs.existsSync(distIndex)) {
+    const diagnostic = String(result.stderr || result.stdout || result.error?.message || 'Unknown build failure').slice(-4_000);
+    logger.error('frontend.build.failed', { status: result.status, diagnostic });
+    throw new Error('Frontend production build failed during server startup.');
+  }
+
+  logger.info('frontend.build.completed', { distFolder });
+}
 
 fs.mkdirSync(uploadFolder, { recursive: true });
 validateProductionEnv();
+ensureFrontendBuild();
 
 if (!env.smtpHost || !env.smtpUser || !env.smtpPass) logger.warn('integration.email.disabled', { reason: 'not-configured' });
 if (!env.whatsappAccessToken || !env.whatsappPhoneNumberId || !env.whatsappBusinessAccountId) logger.warn('integration.whatsapp.disabled', { reason: 'not-configured' });
@@ -74,11 +103,11 @@ app.use('/api', productionRoutes);
 
 app.use('/api', notFoundHandler);
 
-console.log('DIST EXISTS:', fs.existsSync(distFolder));
+console.log('DIST EXISTS:', fs.existsSync(distIndex));
 console.log('DIST PATH:', distFolder);
 console.log('CURRENT DIRECTORY:', __dirname);
 if (fs.existsSync(distFolder)) console.log('DIST CONTENTS:', fs.readdirSync(distFolder));
-if (fs.existsSync(distFolder)) {
+if (fs.existsSync(distIndex)) {
   app.use(express.static(distFolder, { maxAge: env.nodeEnv === 'production' ? '1y' : 0, index: false }));
   app.get('*', (request, response) => response.sendFile(path.join(distFolder, 'index.html')));
 } else {

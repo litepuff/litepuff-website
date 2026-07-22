@@ -8,6 +8,7 @@
     "dev:client": "vite",
     "dev:server": "nodemon server/server.js",
     "build": "vite build",
+    "postinstall": "npm run build",
     "test:server": "node --test server/tests/businessServices.test.js server/tests/authCore.test.js server/tests/emailAuth.test.js server/tests/whatsappAuth.test.js server/tests/accountManagement.test.js server/tests/authorization.test.js",
     "preview": "vite preview",
     "prestart": "npm run build",
