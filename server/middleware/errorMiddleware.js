@@ -8,7 +8,8 @@ export function errorHandler(error, request, response, next) {
   const status = Number(error.status || error.statusCode || (error.name === 'MulterError' ? 400 : 500));
   const googleError = /Google Sheet|Google Sheets|spreadsheet|worksheet/i.test(error.message || '');
   const code = error.code || (googleError ? 'GOOGLE_SHEETS_ERROR' : status === 422 ? 'VALIDATION_ERROR' : status === 503 ? 'SERVICE_UNAVAILABLE' : 'INTERNAL_ERROR');
-  logger.error('api.error', { requestId: request.id, method: request.method, path: request.originalUrl, status, code, error: error.message, stack: env.nodeEnv === 'development' ? error.stack : undefined });
-  const message = status >= 500 && env.nodeEnv === 'production' ? 'Something went wrong.' : error.message || 'Something went wrong.';
+  const isGoogleFailure = String(code).startsWith('GOOGLE_');
+  logger.error('api.error', { requestId: request.id, method: request.method, path: request.originalUrl, status, code, error: error.message, details: error.details, stack: isGoogleFailure || env.nodeEnv === 'development' ? error.stack : undefined });
+  const message = status >= 500 && env.nodeEnv === 'production' && !error.expose && !isGoogleFailure ? 'Something went wrong.' : error.message || 'Something went wrong.';
   fail(response, message, status, error.details || {}, code);
 }

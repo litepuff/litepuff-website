@@ -27,6 +27,8 @@ import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import { otpService } from './services/auth/OTPService.js';
 import { AppError } from './utils/AppError.js';
+import { googleSheetsConfig } from './config/GoogleSheetsConfig.js';
+import { googleSheetsService } from './services/GoogleSheetsService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -117,6 +119,18 @@ if (fs.existsSync(distIndex)) {
 // Central error handler keeps API errors consistent and production safe.
 app.use(errorHandler);
 
-export function startServer(port = env.port) { otpService.startCleanup(); return app.listen(port, () => logger.info('server.started', { port, environment: env.nodeEnv })); }
+export function startServer(port = env.port) {
+  otpService.startCleanup();
+  return app.listen(port, async () => {
+    logger.info('server.started', { port, environment: env.nodeEnv });
+    logger.info('google-sheets.credentials.loaded', { configured: googleSheetsConfig.credentialsConfigured, principal: env.googleServiceAccountEmail, spreadsheetIdSuffix: env.googleSheetId.slice(-6) });
+    try {
+      const diagnostic = await googleSheetsService.diagnose();
+      logger.info('google-sheets.startup.connected', { spreadsheet: diagnostic.spreadsheet, worksheetCount: diagnostic.worksheetCount, worksheets: diagnostic.worksheets, missingWorksheets: diagnostic.missingWorksheets });
+    } catch (error) {
+      logger.error('google-sheets.startup.failed', { code: error.code, status: error.status, error: error.message, details: error.details, stack: error.stack });
+    }
+  });
+}
 export default app;
 if (process.env.NODE_ENV !== 'test') startServer();

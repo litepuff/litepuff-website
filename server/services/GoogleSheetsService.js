@@ -36,6 +36,7 @@ export class GoogleSheetsService {
   async batchUpdate(sheetName, updates) { this.#assertSheet(sheetName); return sheets.batchUpdateRows(sheetName, updates); }
   async batchRead(requests) { return Object.fromEntries(await Promise.all(requests.map(async ({ sheet, options }) => [sheet, await this.readRows(sheet, options)]))); }
   async inspect() { return sheets.inspectGoogleSheetsSchema(); }
+  async diagnose() { return sheets.diagnoseGoogleSheetsConnection(); }
   async synchronize(options) { return sheets.synchronizeGoogleSheets(options); }
   async audit() { return sheets.auditGoogleSheetsData(); }
   clearCache() { return sheets.clearGoogleSheetsCache?.(); }
