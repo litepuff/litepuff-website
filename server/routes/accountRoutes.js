@@ -1,0 +1,20 @@
+import express from 'express';
+import { changeEmail, changePhone, deleteAccount, getAccountProfile, listSessions, logoutAllDevices, logoutDevice, recoverAccount, updateAccountProfile } from '../controllers/accountController.js';
+import { protectCustomerRoute, requirePermission } from '../middleware/authMiddleware.js';
+import { authLimiter } from '../middleware/securityMiddleware.js';
+import { PERMISSIONS } from '../config/auth.js';
+import { auditEvent } from '../services/activityLogService.js';
+
+const router = express.Router();
+const handle = (controller) => (request, response, next) => Promise.resolve(controller(request, response, next)).catch(next);
+router.post('/recover', authLimiter, handle(recoverAccount));
+router.use(protectCustomerRoute);
+router.get('/profile', requirePermission(PERMISSIONS.CUSTOMER_PROFILE_READ), handle(getAccountProfile));
+router.put('/profile', requirePermission(PERMISSIONS.CUSTOMER_PROFILE_UPDATE), auditEvent('customer.profile.updated', 'customer.profile'), handle(updateAccountProfile));
+router.post('/change-email', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_IDENTITY_MANAGE), auditEvent('customer.email.changed', 'customer.identity'), handle(changeEmail));
+router.post('/change-phone', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_IDENTITY_MANAGE), auditEvent('customer.phone.changed', 'customer.identity'), handle(changePhone));
+router.post('/delete', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_DELETE), auditEvent('customer.account.deleted', 'customer.account'), handle(deleteAccount));
+router.get('/sessions', requirePermission(PERMISSIONS.CUSTOMER_SESSIONS_MANAGE), handle(listSessions));
+router.post('/logout-device', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_SESSIONS_MANAGE), auditEvent('session.terminated', 'customer.sessions'), handle(logoutDevice));
+router.post('/logout-all', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_SESSIONS_MANAGE), auditEvent('session.all_terminated', 'customer.sessions'), handle(logoutAllDevices));
+export default router;

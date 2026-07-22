@@ -1,0 +1,227 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .admin-input {
+    @apply rounded-2xl border border-brand-border bg-brand-background px-4 py-3 text-sm outline-none transition focus:border-brand-primary;
+  }
+
+  .admin-action {
+    @apply rounded-full border border-brand-border px-3 py-1 text-xs font-black text-brand-text transition hover:bg-brand-background;
+  }
+
+  .admin-danger {
+    @apply rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-black text-rose-700 transition hover:bg-rose-100;
+  }
+}
+
+:root {
+  --announcement-height: 42px;
+  --navbar-height: 72px;
+  --color-primary: 30 77 58;
+  --color-secondary: 200 155 60;
+  --color-accent: 200 155 60;
+  --color-text: 36 48 41;
+  --color-muted: 119 126 121;
+  --color-background: 250 248 242;
+  --color-border: 236 231 221;
+  --color-success: 61 139 64;
+}
+
+@media (min-width: 768px) {
+  :root { --navbar-height: 76px; }
+}
+
+@media (min-width: 1024px) {
+  :root { --navbar-height: 80px; }
+}
+
+.home-main,
+.site-main {
+  padding-top: calc(var(--announcement-height, 0px) + var(--navbar-height));
+}
+
+.home-hero,
+.home-hero-content {
+  min-height: calc(100svh - var(--announcement-height, 0px) - var(--navbar-height));
+}
+
+.hero-copy h1,
+.hero-copy p {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.34);
+}
+
+
+@media (max-width: 639px) {
+  aside[aria-label='Welcome offer'] p {
+    min-width: max-content;
+    padding-left: 100%;
+    animation: announcement-marquee 16s linear infinite;
+  }
+}
+
+@keyframes announcement-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  color: rgb(var(--color-text));
+  background: #faf8f2;
+  font-family: Manrope, ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid #c89b3c;
+  outline-offset: 3px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #1e4d3a;
+  box-shadow: 0 0 0 3px rgba(30, 77, 58, 0.12);
+}
+
+form[aria-label='Contact LitePuff'] button[type='submit'] {
+  min-height: 56px;
+  border-radius: 16px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(30, 77, 58, 0.18);
+  transition: transform 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
+}
+
+form[aria-label='Contact LitePuff'] button[type='submit']:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(30, 77, 58, 0.24);
+}
+
+form[aria-label='Contact LitePuff'] button[type='submit']:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+form[aria-label='Contact LitePuff'] {
+  width: 100%;
+  max-width: 620px;
+  justify-self: end;
+}
+
+form[aria-label='Contact LitePuff'] button[type='submit']::after {
+  content: '→';
+  margin-left: 0.65rem;
+  font-size: 1.1rem;
+  transition: transform 200ms ease;
+}
+
+form[aria-label='Contact LitePuff'] button[type='submit']:hover:not(:disabled)::after {
+  transform: translateX(3px);
+}
+
+form[aria-label='Contact LitePuff'] button[type='submit']:disabled::after {
+  content: '';
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 999px;
+  animation: contact-button-spin 700ms linear infinite;
+}
+
+@keyframes contact-button-spin {
+  to { transform: rotate(360deg); }
+}
+
+::selection {
+  background: rgba(200, 155, 60, 0.28);
+  color: #243029;
+}
+
+.container-page {
+  width: min(1280px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .container-page {
+    width: min(1280px, calc(100% - 48px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-page {
+    width: min(1280px, calc(100% - 64px));
+  }
+}
+
+.premium-card {
+  border: 1px solid rgb(var(--color-border));
+  background: #ffffff;
+  border-radius: 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05);
+}
+
+.focus-ring {
+  outline: 3px solid rgba(205, 157, 78, 0.4);
+  outline-offset: 2px;
+}
+
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 0.65s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

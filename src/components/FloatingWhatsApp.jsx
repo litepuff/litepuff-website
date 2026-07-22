@@ -1,0 +1,7 @@
+import { motion } from 'framer-motion';
+import { FaWhatsapp } from 'react-icons/fa';
+
+export default function FloatingWhatsApp() {
+  const message = encodeURIComponent("Hello LitePuff!\nI'm interested in your products and would like more information.");
+  return <motion.a href={`https://wa.me/918700015378?text=${message}`} target="_blank" rel="noreferrer" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.5 }} whileHover={{ y: -4, scale: 1.04 }} whileTap={{ scale: 0.97 }} className="group fixed bottom-4 right-4 z-40 grid h-[58px] w-[58px] place-items-center rounded-[20px] bg-[#25D366] text-white shadow-[0_12px_30px_rgba(18,88,49,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E4D3A] md:bottom-6 md:right-6" aria-label="Need help? Chat with LitePuff on WhatsApp"><span className="absolute inset-0 rounded-[20px] border border-white/50 opacity-0 transition-all duration-300 group-hover:-inset-2 group-hover:opacity-70" aria-hidden="true" /><FaWhatsapp size={30} aria-hidden="true" /><span role="tooltip" className="pointer-events-none absolute right-full mr-3 hidden w-36 rounded-xl bg-[#243029] px-3 py-2 text-left text-xs font-semibold leading-5 text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 md:block"><span className="block">Need Help?</span><span className="font-normal text-white/75">Chat with LitePuff</span></span></motion.a>;
+}

@@ -1,0 +1,47 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ArrowRight, Droplets, HeartPulse, Scale, Sparkles } from 'lucide-react';
+import Seo from '../components/Seo.jsx';
+import { journalArticles, featuredArticle, journalImages } from '../data/journalData.js';
+import { getBlogs } from '../services/blogService';
+import { contentService } from '../services/contentService';
+import { useToast } from '../context/ToastContext';
+
+const topics = ['Nutrition', 'Recipes', 'Healthy Living', 'Makhana', 'Lifestyle', 'Company News', 'Snacking Tips'];
+const tips = [
+  { icon: Sparkles, title: 'Snack Smart', text: 'Choose satisfying texture and flavour, then portion before the first bite.' },
+  { icon: Droplets, title: 'Stay Hydrated', text: 'Pair snack breaks with water to support a steadier everyday rhythm.' },
+  { icon: Scale, title: 'Mindful Eating', text: 'Pause between handfuls and give flavour the attention it deserves.' },
+  { icon: HeartPulse, title: 'Healthy Alternatives', text: 'Swap fried defaults for roasted options when you want a lighter crunch.' },
+];
+const reveal = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
+
+function mapBlog(blog, index) { return { id: blog.id, title: blog.title, slug: blog.slug, excerpt: blog.excerpt, category: blog.category || 'Stories', topics: blog.tags?.length ? blog.tags : [blog.category || 'Stories'], readTime: blog.readingTime || '3 min read', date: blog.publishedDate ? new Date(blog.publishedDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : '', image: blog.coverImage || journalArticles[index % journalArticles.length]?.image || journalImages.featuredStory }; }
+
+export default function Journal() {
+  const [articles, setArticles] = useState([featuredArticle, ...journalArticles]);
+  const [activeTopic, setActiveTopic] = useState('All');
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { showToast } = useToast();
+
+  useEffect(() => { getBlogs().then((blogs) => { if (blogs.length) setArticles(blogs.map(mapBlog)); }).catch(() => {}); }, []);
+  const featured = articles[0];
+  const latest = useMemo(() => articles.slice(1).filter((article) => activeTopic === 'All' || article.category === activeTopic || article.topics?.includes(activeTopic)), [articles, activeTopic]);
+  const subscribe = async (event) => { event.preventDefault(); setSubmitting(true); try { await contentService.newsletter(email); setEmail(''); showToast('Welcome to the LitePuff Journal.'); } catch { showToast('Unable to subscribe right now.', 'error'); } finally { setSubmitting(false); } };
+
+  return <><Seo title="LitePuff Journal" description="Stories, recipes and smarter snacking ideas from LitePuff." path="/blog" image={journalImages.featuredStory} /><main className="bg-[#FAF8F2]">
+    <header className="px-6 py-9 md:py-11 lg:px-8 lg:py-12"><motion.div className="mx-auto max-w-7xl text-center" initial="hidden" animate="visible" variants={reveal}><p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#C89B3C]">LitePuff Journal</p><h1 className="mt-3 font-display text-[40px] font-semibold leading-[0.98] tracking-[-0.04em] text-[#243029] sm:text-[48px] lg:whitespace-nowrap lg:text-[58px]">Stories, Recipes &amp; Smarter Snacking</h1><p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[#5F6762] md:text-lg">Discover ideas, recipes, nutrition tips and behind-the-scenes stories from LitePuff.</p></motion.div></header>
+
+    {featured ? <section className="border-y border-[#E2DBCF] bg-white px-6 py-12 md:py-16 lg:px-8" aria-labelledby="featured-story-title"><motion.article className="mx-auto grid max-w-7xl items-center gap-8 md:grid-cols-[48%_52%] md:gap-10" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}><motion.div className="overflow-hidden rounded-[28px]" variants={reveal}><img src={featured.image} alt="Featured LitePuff Journal story" className="aspect-[4/3] w-full object-cover" loading="eager" decoding="async" /></motion.div><motion.div variants={reveal}><div className="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#C89B3C]"><span>{featured.category}</span><span>·</span><time>{featured.date}</time><span>·</span><span>{featured.readTime}</span></div><h2 id="featured-story-title" className="mt-4 font-display text-[40px] font-semibold leading-[1.02] tracking-[-0.035em] text-[#243029] md:text-[48px]">{featured.title}</h2><p className="mt-5 max-w-xl text-base leading-7 text-[#5F6762]">{featured.excerpt}</p><Link to={`/blog/${featured.slug}`} className="mt-7 inline-flex h-12 items-center gap-2 rounded-full bg-[#1E4D3A] px-7 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5">Read Article<ArrowRight size={17} aria-hidden="true" /></Link></motion.div></motion.article></section> : null}
+
+    <section className="px-6 py-12 md:py-16 lg:px-8 lg:py-20" aria-labelledby="latest-title"><div className="mx-auto max-w-7xl"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#C89B3C]">Latest Articles</p><h2 id="latest-title" className="mt-2 font-display text-[42px] font-semibold leading-none text-[#243029] md:text-[48px]">Fresh from the Journal</h2></div><p className="max-w-sm text-sm leading-6 text-[#5F6762]">Useful reads for making everyday food choices feel simpler.</p></div><motion.div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }}>{latest.map((article, index) => <motion.article key={article.id || article.slug} className="group flex min-h-[300px] flex-col rounded-[24px] border border-[#E2DBCF] bg-white p-6 transition-shadow hover:shadow-[0_12px_28px_rgba(36,48,41,0.06)]" variants={reveal} transition={{ delay: index * 0.04 }}><div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em] text-[#C89B3C]"><span>{article.category}</span><span>{article.readTime}</span></div><h3 className="mt-6 font-display text-[30px] font-semibold leading-[1.08] text-[#243029]">{article.title}</h3><p className="mt-4 line-clamp-3 text-sm leading-6 text-[#5F6762]">{article.excerpt}</p><div className="mt-auto flex items-center justify-between pt-6"><time className="text-xs text-[#777D79]">{article.date}</time><Link to={`/blog/${article.slug}`} className="grid h-10 w-10 place-items-center rounded-full border border-[#1E4D3A] text-[#1E4D3A] transition-colors group-hover:bg-[#1E4D3A] group-hover:text-white" aria-label={`Read ${article.title}`}><ArrowRight size={17} aria-hidden="true" /></Link></div></motion.article>)}</motion.div></div></section>
+
+    <section className="border-y border-[#E2DBCF] bg-white px-6 py-12 md:py-16 lg:px-8" aria-labelledby="topics-title"><div className="mx-auto max-w-7xl"><h2 id="topics-title" className="font-display text-[38px] font-semibold text-[#243029]">Browse Topics</h2><div className="mt-6 flex flex-wrap gap-2.5">{['All', ...topics].map((topic) => <button key={topic} type="button" onClick={() => setActiveTopic(topic)} className={`h-10 rounded-full border px-4 text-sm font-semibold transition-colors ${activeTopic === topic ? 'border-[#1E4D3A] bg-[#1E4D3A] text-white' : 'border-[#DCD4C7] text-[#243029] hover:border-[#1E4D3A]'}`} aria-pressed={activeTopic === topic}>{topic}</button>)}</div></div></section>
+
+    <section className="px-6 py-12 md:py-16 lg:px-8" aria-labelledby="tips-title"><div className="mx-auto max-w-7xl"><p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#C89B3C]">Quick Reads</p><h2 id="tips-title" className="mt-2 font-display text-[42px] font-semibold text-[#243029]">Healthy Snacking Tips</h2><div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{tips.map(({ icon: Icon, title, text }) => <article key={title} className="rounded-[22px] bg-white p-5"><Icon className="h-6 w-6 text-[#C89B3C]" strokeWidth={1.5} aria-hidden="true" /><h3 className="mt-5 font-display text-[25px] font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-[#5F6762]">{text}</p></article>)}</div></div></section>
+
+    <section className="px-6 pb-12 md:pb-16 lg:px-8 lg:pb-20"><div className="mx-auto max-w-4xl rounded-[28px] bg-[#1E4D3A] px-6 py-9 text-center text-white md:px-10"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#E6C777]">Journal Notes</p><h2 className="mt-3 font-display text-[40px] font-semibold leading-none">Smarter snacking, occasionally delivered.</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-white/75">New stories, useful ideas and LitePuff updates—without inbox clutter.</p><form onSubmit={subscribe} className="mx-auto mt-6 flex max-w-xl flex-col gap-3 sm:flex-row"><label htmlFor="journal-email" className="sr-only">Email address</label><input id="journal-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Your email address" className="h-12 min-w-0 flex-1 rounded-full bg-white px-5 text-sm text-[#243029] outline-none" /><button disabled={submitting} className="h-12 rounded-full bg-[#FAF8F2] px-7 text-sm font-semibold text-[#1E4D3A]">{submitting ? 'Joining…' : 'Join the Journal'}</button></form></div></section>
+  </main></>;
+}

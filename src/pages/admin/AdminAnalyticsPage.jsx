@@ -1,0 +1,65 @@
+import { useEffect, useState } from 'react';
+import AdminStatCard from '../../components/admin/AdminStatCard.jsx';
+import { adminService } from '../../services/adminService';
+import { formatMoney } from '../../utils/formatMoney';
+import { PageTitle } from './AdminProductsPage.jsx';
+
+export default function AdminAnalyticsPage() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => { adminService.dashboard().then(setData); }, []);
+
+  const metrics = data?.metrics || {};
+  const charts = data?.charts || {};
+
+  async function downloadReport(type, format = 'csv') {
+    const blob = await adminService.exportReport(type, { format });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${type}-report.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="grid gap-6">
+      <PageTitle eyebrow="Analytics" title="Revenue, growth and product insights">
+        <div className="flex flex-wrap gap-2">
+          {['orders', 'customers', 'products', 'reviews', 'newsletter', 'revenue'].map((type) => (
+            <button key={type} onClick={() => downloadReport(type, 'xlsx')} className="admin-action capitalize">{type} XLSX</button>
+          ))}
+        </div>
+      </PageTitle>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminStatCard label="Revenue" value={formatMoney(metrics.totalRevenue || 0)} />
+        <AdminStatCard label="Orders" value={metrics.totalOrders || 0} />
+        <AdminStatCard label="Customers" value={metrics.totalCustomers || 0} />
+        <AdminStatCard label="Average Rating" value={metrics.averageRating || 0} />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Insight title="Revenue by Month" rows={charts.revenueByMonth || []} valueKey="revenue" labelKey="month" />
+        <Insight title="Orders by Status" rows={charts.ordersByStatus || []} valueKey="count" labelKey="status" />
+        <Insight title="Best Sellers" rows={charts.topSellingProducts || []} valueKey="quantity" labelKey="name" />
+        <Insight title="Sales Growth" rows={charts.revenueByMonth || []} valueKey="orders" labelKey="month" />
+      </div>
+    </section>
+  );
+}
+
+function Insight({ title, rows, labelKey, valueKey }) {
+  const max = Math.max(...rows.map((row) => Number(row[valueKey] || 0)), 1);
+  return (
+    <article className="rounded-[24px] border border-brand-border bg-white p-5 shadow-sm">
+      <h2 className="font-display text-2xl font-black">{title}</h2>
+      <div className="mt-5 grid gap-3">
+        {rows.length ? rows.map((row) => (
+          <div key={`${title}-${row[labelKey]}`}>
+            <div className="flex justify-between text-sm font-bold"><span>{row[labelKey]}</span><span>{row[valueKey]}</span></div>
+            <div className="mt-2 h-2 rounded-full bg-brand-background"><div className="h-2 rounded-full bg-brand-accent" style={{ width: `${(Number(row[valueKey] || 0) / max) * 100}%` }} /></div>
+          </div>
+        )) : <p className="text-sm text-brand-muted">No analytics available yet.</p>}
+      </div>
+    </article>
+  );
+}

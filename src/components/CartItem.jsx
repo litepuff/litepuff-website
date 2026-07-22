@@ -1,0 +1,62 @@
+import { motion } from 'framer-motion';
+import { FiMinus, FiPlus } from 'react-icons/fi';
+import cheeseImage from '../assets/images/products/cheese.png';
+import creamOnionImage from '../assets/images/products/cream-onion.png';
+import mintImage from '../assets/images/products/mint.png';
+import periPeriImage from '../assets/images/products/peri-peri.png';
+import saltPepperImage from '../assets/images/products/salt-pepper.png';
+import { formatMoney } from '../utils/formatMoney';
+
+const productImages = {
+  Cheese: cheeseImage,
+  'Cream & Onion': creamOnionImage,
+  Mint: mintImage,
+  'Peri Peri': periPeriImage,
+  'Salt & Pepper': saltPepperImage,
+};
+
+function getProductImage(item) {
+  if (productImages[item.flavour]) return productImages[item.flavour];
+  const name = item.name?.toLowerCase() || '';
+  if (name.includes('cream') || name.includes('onion')) return creamOnionImage;
+  if (name.includes('cheese')) return cheeseImage;
+  if (name.includes('mint') || name.includes('pudina')) return mintImage;
+  if (name.includes('salt') || name.includes('pepper')) return saltPepperImage;
+  return periPeriImage;
+}
+
+export default function CartItem({ item, onUpdateQuantity, onRemove }) {
+  const image = getProductImage(item);
+
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className="flex gap-3 rounded-[20px] border border-[#ECE7DD] bg-white p-3 shadow-[0_5px_18px_rgba(36,48,41,0.035)]"
+    >
+      <div className="flex h-[86px] w-[82px] shrink-0 items-center justify-center rounded-[16px] bg-[#FAF8F2]">
+        <img src={image} alt={item.name} className="h-[68px] w-[68px] object-contain" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-display text-[20px] font-semibold leading-5 tracking-[-0.02em] text-[#243029]">{item.name}</h3>
+            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#7A817C]">{item.weight || '80 g'}</p>
+          </div>
+          <p className="shrink-0 text-sm font-semibold text-[#243029]">{formatMoney(item.price * item.quantity)}</p>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="grid h-8 grid-cols-3 overflow-hidden rounded-full border border-[#E3DDD2] bg-[#FAF8F3]" aria-label={`Quantity for ${item.name}`}>
+            <button type="button" onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} className="grid h-8 w-8 place-items-center text-[#1F5E3B] transition-colors hover:bg-white" aria-label={`Decrease ${item.name} quantity`}><FiMinus size={13} /></button>
+            <span className="grid h-8 w-7 place-items-center text-xs font-semibold" aria-live="polite">{item.quantity}</span>
+            <button type="button" onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} className="grid h-8 w-8 place-items-center text-[#1F5E3B] transition-colors hover:bg-white" aria-label={`Increase ${item.name} quantity`}><FiPlus size={13} /></button>
+          </div>
+          <button type="button" onClick={() => onRemove(item.id)} className="text-[11px] font-semibold text-[#7A817C] transition-colors hover:text-[#9A392F]">Remove</button>
+        </div>
+      </div>
+    </motion.article>
+  );
+}

@@ -1,0 +1,10 @@
+{
+  "name": "LitePuff",
+  "short_name": "LitePuff",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "any", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "theme_color": "#FAF8F2",
+  "background_color": "#FAF8F2",
+  "display": "standalone"
+}
