@@ -1,6 +1,25 @@
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
+
+export function normalizeEnvironmentValue(value) {
+  let normalized = String(value ?? '').replace(/^\uFEFF/, '').trim();
+  const wrappedInDoubleQuotes = normalized.startsWith('"') && normalized.endsWith('"');
+  const wrappedInSingleQuotes = normalized.startsWith("'") && normalized.endsWith("'");
+  if (wrappedInDoubleQuotes || wrappedInSingleQuotes) normalized = normalized.slice(1, -1).trim();
+  return normalized;
+}
+
+export function isValidBcryptHash(value) {
+  if (typeof value !== 'string' || value.length !== 60 || !/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value)) return false;
+  try {
+    const rounds = bcrypt.getRounds(value);
+    return Number.isInteger(rounds) && rounds >= 10 && rounds <= 14;
+  } catch {
+    return false;
+  }
+}
 
 export const env = {
   port: process.env.PORT || 5000,
@@ -18,9 +37,9 @@ export const env = {
   otpMaxResends: Number(process.env.OTP_MAX_RESENDS || 3),
   otpLockMinutes: Number(process.env.OTP_LOCK_MINUTES || 15),
   otpCleanupIntervalMinutes: Number(process.env.OTP_CLEANUP_INTERVAL_MINUTES || 5),
-  adminEmail: process.env.ADMIN_EMAIL || '',
+  adminEmail: normalizeEnvironmentValue(process.env.ADMIN_EMAIL),
   adminPassword: process.env.ADMIN_PASSWORD || '',
-  adminPasswordHash: process.env.ADMIN_PASSWORD_HASH || '',
+  adminPasswordHash: normalizeEnvironmentValue(process.env.ADMIN_PASSWORD_HASH),
   adminRole: process.env.ADMIN_ROLE || 'super_admin',
   nodeEnv: process.env.NODE_ENV || 'development',
   appUrl: process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -73,7 +92,7 @@ export function validateProductionEnv() {
   if (env.nodeEnv === 'production' && new Set([env.jwtSecret, env.jwtRefreshSecret, env.cookieSecret, env.otpSecret]).size !== 4) throw new Error('Authentication secrets must be independent values.');
   if (env.nodeEnv === 'production' && !env.adminEmail) throw new Error('ADMIN_EMAIL is required in production.');
   if (env.nodeEnv === 'production' && !env.adminPasswordHash) throw new Error('ADMIN_PASSWORD_HASH is required in production; plaintext ADMIN_PASSWORD is not permitted.');
-  if (env.nodeEnv === 'production' && env.adminPasswordHash && !/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(env.adminPasswordHash)) throw new Error('ADMIN_PASSWORD_HASH must be a valid bcrypt hash.');
+  if (env.nodeEnv === 'production' && env.adminPasswordHash && !isValidBcryptHash(env.adminPasswordHash)) throw new Error('ADMIN_PASSWORD_HASH must be a valid bcrypt hash with a cost between 10 and 14.');
   if (env.nodeEnv === 'production') { const invalidUrls = Object.entries({ FRONTEND_URL: env.clientUrl, BACKEND_URL: env.backendUrl, APP_URL: env.appUrl }).filter(([, value]) => !/^https:\/\//i.test(value) || /localhost|127\.0\.0\.1/i.test(value)).map(([key]) => key); if (invalidUrls.length) throw new Error(`Production URLs must use public HTTPS origins: ${invalidUrls.join(', ')}`); }
   if (!Number.isFinite(env.accessTokenMinutes) || env.accessTokenMinutes <= 0) throw new Error('ACCESS_TOKEN_MINUTES must be a positive number.');
   if (!Number.isFinite(env.refreshTokenDays) || env.refreshTokenDays <= 0) throw new Error('REFRESH_TOKEN_DAYS must be a positive number.');
