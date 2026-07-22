@@ -3,30 +3,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export function normalizeGooglePrivateKey(value = '') {
-  return String(value).trim().replace(/\\+n/g, '\n').replace(/\r\n/g, '\n');
+  const key = String(value).trim();
+  return key.includes('\\n') ? key.replace(/\\n/g, '\n') : key;
 }
-
-function serviceAccountJsonError(message, cause) {
-  const error = new Error(message, cause ? { cause } : undefined);
-  error.code = 'GOOGLE_SERVICE_ACCOUNT_JSON_INVALID';
-  error.status = 503;
-  error.expose = true;
-  return error;
-}
-
-export function parseGoogleServiceAccountJson(value) {
-  let credentials;
-  try { credentials = JSON.parse(String(value)); } catch (cause) { throw serviceAccountJsonError(`GOOGLE_SERVICE_ACCOUNT_JSON contains invalid JSON: ${cause.message}`, cause); }
-  if (!credentials || Array.isArray(credentials) || typeof credentials !== 'object') throw serviceAccountJsonError('GOOGLE_SERVICE_ACCOUNT_JSON must contain one JSON object.');
-  const missing = ['client_email', 'private_key'].filter((field) => !credentials[field] || typeof credentials[field] !== 'string');
-  if (missing.length) throw serviceAccountJsonError(`GOOGLE_SERVICE_ACCOUNT_JSON is missing required string fields: ${missing.join(', ')}`);
-  return credentials;
-}
-
-const hasGoogleServiceAccountJson = Object.prototype.hasOwnProperty.call(process.env, 'GOOGLE_SERVICE_ACCOUNT_JSON');
-const googleServiceAccount = hasGoogleServiceAccountJson ? parseGoogleServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON) : null;
-const googleCredentialsSource = googleServiceAccount ? 'GOOGLE_SERVICE_ACCOUNT_JSON' : 'LEGACY_ENVIRONMENT_VARIABLES';
-const googlePrivateKeyOriginal = googleServiceAccount?.private_key ?? process.env.GOOGLE_PRIVATE_KEY ?? '';
 
 export const env = {
   port: process.env.PORT || 5000,
@@ -69,16 +48,14 @@ export const env = {
   gstNumber: process.env.GST_NUMBER || '',
   businessAddress: process.env.BUSINESS_ADDRESS || '',
   googleSheetId: process.env.GOOGLE_SHEET_ID || '',
-  googleCredentialsSource,
-  googlePrivateKeyOriginal,
-  googleServiceAccountEmail: googleServiceAccount?.client_email ?? (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_SERVICE_EMAIL || ''),
-  googlePrivateKey: normalizeGooglePrivateKey(googlePrivateKeyOriginal),
-  googleProjectId: googleServiceAccount?.project_id ?? process.env.GOOGLE_PROJECT_ID ?? '',
-  googleClientId: googleServiceAccount?.client_id ?? process.env.GOOGLE_CLIENT_ID ?? '',
-  googleClientCertUrl: googleServiceAccount?.client_x509_cert_url ?? process.env.GOOGLE_CLIENT_CERT_URL ?? '',
-  googleTokenUri: googleServiceAccount?.token_uri ?? process.env.GOOGLE_TOKEN_URI ?? 'https://oauth2.googleapis.com/token',
-  googleAuthUri: googleServiceAccount?.auth_uri ?? process.env.GOOGLE_AUTH_URI ?? 'https://accounts.google.com/o/oauth2/auth',
-  googlePrivateKeyId: googleServiceAccount?.private_key_id ?? process.env.GOOGLE_PRIVATE_KEY_ID ?? '',
+  googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_SERVICE_EMAIL || '',
+  googlePrivateKey: normalizeGooglePrivateKey(process.env.GOOGLE_PRIVATE_KEY),
+  googleProjectId: process.env.GOOGLE_PROJECT_ID || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientCertUrl: process.env.GOOGLE_CLIENT_CERT_URL || '',
+  googleTokenUri: process.env.GOOGLE_TOKEN_URI || 'https://oauth2.googleapis.com/token',
+  googleAuthUri: process.env.GOOGLE_AUTH_URI || 'https://accounts.google.com/o/oauth2/auth',
+  googlePrivateKeyId: process.env.GOOGLE_PRIVATE_KEY_ID || '',
   whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
   whatsappBusinessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',

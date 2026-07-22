@@ -4,7 +4,6 @@ import { COLUMN_ALIASES, SHEET_DEPENDENCIES, SHEET_RULES, SHEET_SCHEMAS } from '
 import { googleSheetsConfig } from '../config/GoogleSheetsConfig.js';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../utils/AppError.js';
-import { getGooglePrivateKeyParseDiagnostics } from '../utils/googlePrivateKeyDiagnostics.js';
 
 export const SHEETS = SHEET_SCHEMAS;
 
@@ -36,27 +35,24 @@ function requireConfig() {
 async function accessToken() {
   requireConfig();
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
-  const credentials = googleSheetsConfig.credentials;
 
   const now = Math.floor(Date.now() / 1000);
   const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
-    iss: credentials.client_email,
+    iss: env.googleServiceAccountEmail,
     scope: GOOGLE_SCOPE,
-    aud: credentials.token_uri,
+    aud: env.googleTokenUri,
     iat: now,
     exp: now + 3600
   })}`;
   let signature;
   try {
-    crypto.createPrivateKey(credentials.private_key);
-    signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), credentials.private_key).toString('base64url');
+    signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), env.googlePrivateKey).toString('base64url');
   } catch (cause) {
-    const parseDiagnostics = getGooglePrivateKeyParseDiagnostics(credentials.private_key);
-    throw new AppError(`Google service-account private-key parsing failed: ${cause.message}`, { status: 503, code: 'GOOGLE_PRIVATE_KEY_INVALID', details: { step: 'private-key-parse', causeCode: cause.code, reason: cause.reason, library: cause.library, opensslErrorStack: cause.opensslErrorStack, firstStructuralDifference: parseDiagnostics.firstStructuralDifference, pemStructure: parseDiagnostics.pemStructure }, cause, expose: true });
+    throw new AppError(`Google service-account JWT signing failed: ${cause.message}`, { status: 503, code: 'GOOGLE_PRIVATE_KEY_INVALID', details: { step: 'jwt-signing', causeCode: cause.code }, cause, expose: true });
   }
   let response;
   try {
-    response = await fetch(credentials.token_uri, { method: 'POST', signal: AbortSignal.timeout(15_000), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${signature}` }) });
+    response = await fetch(env.googleTokenUri, { method: 'POST', signal: AbortSignal.timeout(15_000), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${signature}` }) });
   } catch (cause) {
     throw new AppError(`Google OAuth token request failed: ${cause.message}`, { status: 503, code: 'GOOGLE_TOKEN_NETWORK_ERROR', details: { step: 'oauth-token', causeCode: cause.code || cause.name }, cause, expose: true });
   }
@@ -335,7 +331,7 @@ export async function diagnoseGoogleSheetsConnection() {
   const spreadsheet = await spreadsheetMetadata(true);
   const worksheets = (spreadsheet.sheets || []).map((sheet) => sheet.properties.title);
   const missingWorksheets = Object.keys(SHEETS).filter((title) => !worksheets.includes(title));
-  return { connected: true, authenticated: true, googleCredentialsSource: googleSheetsConfig.credentialsSource, spreadsheet: spreadsheet.properties?.title || 'Untitled', worksheetCount: worksheets.length, worksheets, missingWorksheets, scope: GOOGLE_SCOPE };
+  return { connected: true, spreadsheet: spreadsheet.properties?.title || 'Untitled', worksheetCount: worksheets.length, worksheets, missingWorksheets, scope: GOOGLE_SCOPE };
 }
 
 export function resetGoogleSheetsConnection() {
