@@ -69,6 +69,7 @@ ensureFrontendBuild();
 
 if (!env.smtpHost || !env.smtpUser || !env.smtpPass) logger.warn('integration.email.disabled', { reason: 'not-configured' });
 if (!env.whatsappAccessToken || !env.whatsappPhoneNumberId || !env.whatsappBusinessAccountId) logger.warn('integration.whatsapp.disabled', { reason: 'not-configured' });
+if (env.googleCredentialsError) logger.warn('google-sheets.disabled', { source: env.googleCredentialsSource, reason: env.googleCredentialsError });
 
 const app = express();
 

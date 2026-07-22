@@ -24,9 +24,14 @@ export function parseGoogleServiceAccountJson(value) {
 }
 
 const hasGoogleServiceAccountJson = Object.prototype.hasOwnProperty.call(process.env, 'GOOGLE_SERVICE_ACCOUNT_JSON');
-const googleServiceAccount = hasGoogleServiceAccountJson ? parseGoogleServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON) : null;
-const googleCredentialsSource = googleServiceAccount ? 'GOOGLE_SERVICE_ACCOUNT_JSON' : 'LEGACY_ENVIRONMENT_VARIABLES';
-const googlePrivateKeyOriginal = googleServiceAccount?.private_key ?? process.env.GOOGLE_PRIVATE_KEY ?? '';
+let googleServiceAccount = null;
+let googleCredentialsError = '';
+if (hasGoogleServiceAccountJson) {
+  try { googleServiceAccount = parseGoogleServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); }
+  catch (error) { googleCredentialsError = error.message; }
+}
+const googleCredentialsSource = hasGoogleServiceAccountJson ? 'GOOGLE_SERVICE_ACCOUNT_JSON' : 'LEGACY_ENVIRONMENT_VARIABLES';
+const googlePrivateKeyOriginal = hasGoogleServiceAccountJson ? (googleServiceAccount?.private_key || '') : (process.env.GOOGLE_PRIVATE_KEY || '');
 
 export const env = {
   port: process.env.PORT || 5000,
@@ -70,8 +75,9 @@ export const env = {
   businessAddress: process.env.BUSINESS_ADDRESS || '',
   googleSheetId: process.env.GOOGLE_SHEET_ID || '',
   googleCredentialsSource,
+  googleCredentialsError,
   googlePrivateKeyOriginal,
-  googleServiceAccountEmail: googleServiceAccount?.client_email ?? (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_SERVICE_EMAIL || ''),
+  googleServiceAccountEmail: hasGoogleServiceAccountJson ? (googleServiceAccount?.client_email || '') : (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_SERVICE_EMAIL || ''),
   googlePrivateKey: normalizeGooglePrivateKey(googlePrivateKeyOriginal),
   googleProjectId: googleServiceAccount?.project_id ?? process.env.GOOGLE_PROJECT_ID ?? '',
   googleClientId: googleServiceAccount?.client_id ?? process.env.GOOGLE_CLIENT_ID ?? '',
@@ -109,10 +115,7 @@ export function validateProductionEnv() {
     COOKIE_SECRET: env.cookieSecret,
     OTP_SECRET: env.otpSecret,
     FRONTEND_URL: env.clientUrl,
-    BACKEND_URL: env.backendUrl,
-    GOOGLE_SHEET_ID: env.googleSheetId,
-    'GOOGLE_SERVICE_ACCOUNT_EMAIL (or GOOGLE_SERVICE_EMAIL)': env.googleServiceAccountEmail,
-    GOOGLE_PRIVATE_KEY: env.googlePrivateKey
+    BACKEND_URL: env.backendUrl
   };
   const missing = Object.entries(required).filter(([, value]) => !value).map(([key]) => key);
   if (missing.length) throw new Error(`Missing production environment variables: ${missing.join(', ')}`);

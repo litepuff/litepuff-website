@@ -13,9 +13,11 @@ export class GoogleSheetsConfig {
     this.authUri = env.googleAuthUri;
     this.clientId = env.googleClientId;
     this.credentialsSource = env.googleCredentialsSource;
+    this.credentialsError = env.googleCredentialsError;
     GoogleSheetsConfig.instance = this;
   }
   validate() {
+    if (this.credentialsError) throw new AppError(this.credentialsError, { status: 503, code: 'GOOGLE_SERVICE_ACCOUNT_JSON_INVALID', details: { step: 'credentials-loading', credentialsSource: this.credentialsSource }, expose: true });
     const missing = Object.entries({ GOOGLE_SHEET_ID: this.spreadsheetId, 'GOOGLE_SERVICE_ACCOUNT_EMAIL (or GOOGLE_SERVICE_EMAIL)': this.serviceAccountEmail, GOOGLE_PRIVATE_KEY: this.privateKey }).filter(([, value]) => !value).map(([key]) => key);
     if (missing.length) throw new AppError(`Google Sheets credentials are missing: ${missing.join(', ')}`, { status: 503, code: 'GOOGLE_CREDENTIALS_MISSING', details: { missing } });
     if (!this.privateKey.includes('-----BEGIN PRIVATE KEY-----') || !this.privateKey.includes('-----END PRIVATE KEY-----')) {
