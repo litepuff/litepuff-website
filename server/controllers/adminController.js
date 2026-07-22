@@ -136,8 +136,8 @@ export async function adminLogin(request, response) {
   try {
     passwordMatches = await bcrypt.compare(password, env.adminPasswordHash);
   } catch (error) {
-    logger.error("auth.admin.password-verification-failed", { requestId: request.id, error: error.message });
-    throw new AppError("Admin authentication is temporarily unavailable.", { status: 503, code: "ADMIN_AUTH_UNAVAILABLE", expose: true, cause: error });
+    logger.error("Invalid ADMIN_PASSWORD_HASH configuration.", { requestId: request.id });
+    throw new AppError("Admin authentication is temporarily unavailable.", { status: 500, code: "ADMIN_AUTH_CONFIGURATION_ERROR", expose: true, cause: error });
   }
   if (!emailMatches || !passwordMatches) {
     logger.warn("auth.admin.login-rejected", { requestId: request.id, reason: !emailMatches ? "email-mismatch" : "password-mismatch" });

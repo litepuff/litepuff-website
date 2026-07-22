@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
@@ -9,16 +8,6 @@ export function normalizeEnvironmentValue(value) {
   const wrappedInSingleQuotes = normalized.startsWith("'") && normalized.endsWith("'");
   if (wrappedInDoubleQuotes || wrappedInSingleQuotes) normalized = normalized.slice(1, -1).trim();
   return normalized;
-}
-
-export function isValidBcryptHash(value) {
-  if (typeof value !== 'string' || value.length !== 60 || !/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value)) return false;
-  try {
-    const rounds = bcrypt.getRounds(value);
-    return Number.isInteger(rounds) && rounds >= 10 && rounds <= 14;
-  } catch {
-    return false;
-  }
 }
 
 export const env = {
@@ -90,9 +79,6 @@ export function validateProductionEnv() {
   if (env.nodeEnv === 'production' && env.otpSecret.length < 32) throw new Error('OTP_SECRET must be at least 32 characters in production.');
   if (env.nodeEnv === 'production' && [env.jwtSecret, env.jwtRefreshSecret, env.cookieSecret, env.otpSecret].some((secret) => /replace|change|example|development/i.test(secret))) throw new Error('Authentication secrets must not use placeholder values in production.');
   if (env.nodeEnv === 'production' && new Set([env.jwtSecret, env.jwtRefreshSecret, env.cookieSecret, env.otpSecret]).size !== 4) throw new Error('Authentication secrets must be independent values.');
-  if (env.nodeEnv === 'production' && !env.adminEmail) throw new Error('ADMIN_EMAIL is required in production.');
-  if (env.nodeEnv === 'production' && !env.adminPasswordHash) throw new Error('ADMIN_PASSWORD_HASH is required in production; plaintext ADMIN_PASSWORD is not permitted.');
-  if (env.nodeEnv === 'production' && env.adminPasswordHash && !isValidBcryptHash(env.adminPasswordHash)) throw new Error('ADMIN_PASSWORD_HASH must be a valid bcrypt hash with a cost between 10 and 14.');
   if (env.nodeEnv === 'production') { const invalidUrls = Object.entries({ FRONTEND_URL: env.clientUrl, BACKEND_URL: env.backendUrl, APP_URL: env.appUrl }).filter(([, value]) => !/^https:\/\//i.test(value) || /localhost|127\.0\.0\.1/i.test(value)).map(([key]) => key); if (invalidUrls.length) throw new Error(`Production URLs must use public HTTPS origins: ${invalidUrls.join(', ')}`); }
   if (!Number.isFinite(env.accessTokenMinutes) || env.accessTokenMinutes <= 0) throw new Error('ACCESS_TOKEN_MINUTES must be a positive number.');
   if (!Number.isFinite(env.refreshTokenDays) || env.refreshTokenDays <= 0) throw new Error('REFRESH_TOKEN_DAYS must be a positive number.');

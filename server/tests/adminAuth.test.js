@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { env, isValidBcryptHash, normalizeEnvironmentValue } from '../config/env.js';
+import { env, normalizeEnvironmentValue } from '../config/env.js';
 import { adminLogin } from '../controllers/adminController.js';
 import { protectAdminRoute } from '../middleware/authMiddleware.js';
 
@@ -17,13 +17,10 @@ test.before(async () => {
 
 test.after(() => Object.assign(env, original));
 
-test('Hostinger-style whitespace and quote wrappers are normalized before bcrypt validation', async () => {
+test('Hostinger-style whitespace and quote wrappers are normalized before authentication', async () => {
   const hash = await bcrypt.hash('Environment-password-123', 10);
   assert.equal(normalizeEnvironmentValue(`  "${hash}"\r\n`), hash);
   assert.equal(normalizeEnvironmentValue(`\uFEFF'${hash}'`), hash);
-  assert.equal(isValidBcryptHash(hash), true);
-  assert.equal(isValidBcryptHash(`${hash} `), false);
-  assert.equal(isValidBcryptHash('$2b$04$invalid'), false);
 });
 
 test('valid admin credentials create a signed admin JWT', async () => {

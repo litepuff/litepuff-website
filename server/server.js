@@ -75,6 +75,8 @@ try {
   logger.error('startup.environment.invalid', { error: error.message, stack: error.stack });
   throw error;
 }
+if (env.adminEmail && env.adminPasswordHash) logger.info('auth.admin.configured');
+else logger.warn('auth.admin.disabled', { reason: 'missing-credentials', emailConfigured: Boolean(env.adminEmail), passwordHashConfigured: Boolean(env.adminPasswordHash) });
 logger.info('startup.frontend.initializing');
 ensureFrontendBuild();
 logger.info('startup.frontend.ready', { distIndex });
