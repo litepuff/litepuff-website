@@ -125,7 +125,7 @@ export function startServer(port = env.port) {
   otpService.startCleanup();
   return app.listen(port, async () => {
     logger.info('server.started', { port, environment: env.nodeEnv });
-    logger.info('google-sheets.credentials.loaded', { configured: googleSheetsConfig.credentialsConfigured, principal: env.googleServiceAccountEmail, spreadsheetIdSuffix: env.googleSheetId.slice(-6) });
+    logger.info('google-sheets.credentials.loaded', { configured: googleSheetsConfig.credentialsConfigured, source: googleSheetsConfig.credentialsSource, principal: env.googleServiceAccountEmail, spreadsheetIdSuffix: env.googleSheetId.slice(-6) });
     try {
       const diagnostic = await googleSheetsService.diagnose();
       logger.info('google-sheets.startup.connected', { spreadsheet: diagnostic.spreadsheet, worksheetCount: diagnostic.worksheetCount, worksheets: diagnostic.worksheets, missingWorksheets: diagnostic.missingWorksheets });
