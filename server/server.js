@@ -67,13 +67,24 @@ function ensureFrontendBuild() {
 }
 
 fs.mkdirSync(uploadFolder, { recursive: true });
-validateProductionEnv();
+logger.info('startup.environment.loaded', { environment: env.nodeEnv });
+try {
+  validateProductionEnv();
+  logger.info('startup.environment.validated', { environment: env.nodeEnv });
+} catch (error) {
+  logger.error('startup.environment.invalid', { error: error.message, stack: error.stack });
+  throw error;
+}
+logger.info('startup.frontend.initializing');
 ensureFrontendBuild();
+logger.info('startup.frontend.ready', { distIndex });
 
+logger.info('startup.notifications.initializing');
 if (!env.resendApiKey && (!env.smtpHost || !env.smtpUser || !env.smtpPass)) logger.warn('integration.email.disabled', { reason: 'not-configured' });
 if (whatsAppConfig.configured) logger.info('integration.whatsapp.configured', { apiVersion: whatsAppConfig.metaApiVersion, webhookConfigured: whatsAppConfig.webhookConfigured });
 else logger.warn('integration.whatsapp.disabled', { reason: whatsAppConfig.disabledReason, missing: whatsAppConfig.validation.missing, invalid: whatsAppConfig.validation.invalid });
 
+logger.info('startup.express.initializing');
 const app = express();
 
 app.set('trust proxy', 1);
@@ -123,8 +134,10 @@ app.use(errorHandler);
 
 export function startServer(port = env.port) {
   otpService.startCleanup();
-  return app.listen(port, async () => {
-    logger.info('server.started', { port, environment: env.nodeEnv });
+  logger.info('startup.http.starting', { port });
+  const server = app.listen(port, async () => {
+    logger.info('startup.server.started-successfully', { port, environment: env.nodeEnv });
+    logger.info('startup.google-sheets.initializing');
     const credentialState = googleCredentialProvider.diagnostics();
     logger.info('google.credentials.loaded', { source: credentialState.credentialSource, configured: googleSheetsConfig.credentialsConfigured, clientEmail: credentialState.clientEmail, fingerprint: credentialState.credentialFingerprint });
     try {
@@ -146,6 +159,8 @@ export function startServer(port = env.port) {
       logger.warn('whatsapp.startup.disabled', { reason: error.message });
     }
   });
+  server.on('error', (error) => logger.error('startup.http.failed', { port, error: error.message, code: error.code, stack: error.stack }));
+  return server;
 }
 export default app;
 if (process.env.NODE_ENV !== 'test') startServer();
