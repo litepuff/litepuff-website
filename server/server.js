@@ -74,9 +74,13 @@ app.use('/api', productionRoutes);
 
 app.use('/api', notFoundHandler);
 
+console.log('DIST EXISTS:', fs.existsSync(distFolder));
+console.log('DIST PATH:', distFolder);
 if (fs.existsSync(distFolder)) {
   app.use(express.static(distFolder, { maxAge: env.nodeEnv === 'production' ? '1y' : 0, index: false }));
   app.get('*', (request, response) => response.sendFile(path.join(distFolder, 'index.html')));
+} else {
+  console.error('DIST FOLDER NOT FOUND');
 }
 
 // Central error handler keeps API errors consistent and production safe.
