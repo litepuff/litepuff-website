@@ -1,14 +1,11 @@
-import crypto from 'crypto';
-import { env } from '../config/env.js';
 import { COLUMN_ALIASES, SHEET_DEPENDENCIES, SHEET_RULES, SHEET_SCHEMAS } from '../config/sheets.js';
 import { googleSheetsConfig } from '../config/GoogleSheetsConfig.js';
+import { googleCredentialProvider } from '../config/GoogleCredentialProvider.js';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../utils/AppError.js';
 
 export const SHEETS = SHEET_SCHEMAS;
 
-let cachedToken;
-let tokenExpiresAt = 0;
 let initialization;
 let metadataCache;
 let metadataExpiresAt = 0;
@@ -24,52 +21,25 @@ function safeGooglePayload(payload) {
   return { code: source.code, status: source.status, message: source.message || source.error_description || source.error, details: source.details };
 }
 
-function encode(value) {
-  return Buffer.from(JSON.stringify(value)).toString('base64url');
-}
-
 function requireConfig() {
   googleSheetsConfig.validate();
 }
 
 async function accessToken() {
   requireConfig();
-  if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
-
-  const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
-    iss: env.googleServiceAccountEmail,
-    scope: GOOGLE_SCOPE,
-    aud: env.googleTokenUri,
-    iat: now,
-    exp: now + 3600
-  })}`;
-  let signature;
   try {
-    signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), env.googlePrivateKey).toString('base64url');
+    return await googleCredentialProvider.getAccessToken();
   } catch (cause) {
-    throw new AppError(`Google service-account JWT signing failed: ${cause.message}`, { status: 503, code: 'GOOGLE_PRIVATE_KEY_INVALID', details: { step: 'jwt-signing', causeCode: cause.code }, cause, expose: true });
+    googleCredentialProvider.markFailure(cause);
+    throw new AppError(`Google authentication failed: ${cause.message}`, { status: 503, code: cause.code || 'GOOGLE_AUTHENTICATION_FAILED', details: { step: 'google-authentication', source: googleCredentialProvider.diagnostics().credentialSource }, cause, expose: true });
   }
-  let response;
-  try {
-    response = await fetch(env.googleTokenUri, { method: 'POST', signal: AbortSignal.timeout(15_000), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${signature}` }) });
-  } catch (cause) {
-    throw new AppError(`Google OAuth token request failed: ${cause.message}`, { status: 503, code: 'GOOGLE_TOKEN_NETWORK_ERROR', details: { step: 'oauth-token', causeCode: cause.code || cause.name }, cause, expose: true });
-  }
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new AppError(`Google OAuth rejected the service account: ${payload.error_description || payload.error || response.statusText}`, { status: 503, code: 'GOOGLE_TOKEN_AUTH_ERROR', details: { step: 'oauth-token', googleStatus: response.status, googleResponse: safeGooglePayload(payload) }, expose: true });
-  if (!payload.access_token) throw new AppError('Google OAuth response did not contain an access token.', { status: 503, code: 'GOOGLE_TOKEN_INVALID_RESPONSE', details: { step: 'oauth-token', googleStatus: response.status }, expose: true });
-
-  cachedToken = payload.access_token;
-  tokenExpiresAt = Date.now() + payload.expires_in * 1000;
-  return cachedToken;
 }
 
 async function request(path, options = {}, attempt = 0) {
   const started = performance.now();
   let response;
   try {
-    response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.googleSheetId}${path}`, {
+    response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${googleSheetsConfig.spreadsheetId}${path}`, {
       ...options,
       signal: AbortSignal.timeout(15_000),
       headers: {
@@ -85,7 +55,9 @@ async function request(path, options = {}, attempt = 0) {
       return request(path, options, attempt + 1);
     }
     if (cause instanceof AppError) throw cause;
-    throw new AppError(`Google Sheets network request failed: ${cause.message}`, { status: 503, code: cause.name === 'TimeoutError' ? 'GOOGLE_SHEETS_TIMEOUT' : 'GOOGLE_SHEETS_NETWORK_ERROR', details: { step: 'spreadsheet-request', causeCode: cause.code || cause.name }, cause, expose: true });
+    const error = new AppError(`Google Sheets network request failed: ${cause.message}`, { status: 503, code: cause.name === 'TimeoutError' ? 'GOOGLE_SHEETS_TIMEOUT' : 'GOOGLE_SHEETS_NETWORK_ERROR', details: { step: 'spreadsheet-request', causeCode: cause.code || cause.name }, cause, expose: true });
+    googleCredentialProvider.markFailure(error);
+    throw error;
   }
   const payload = response.status === 204 ? null : await response.json();
   if (!response.ok) {
@@ -94,9 +66,11 @@ async function request(path, options = {}, attempt = 0) {
       await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfter, 1_000 * (2 ** attempt))));
       return request(path, options, attempt + 1);
     }
-    const permissionHint = response.status === 403 ? ` Share the spreadsheet with ${env.googleServiceAccountEmail} as Editor and ensure the Google Sheets API is enabled.` : '';
+    const permissionHint = response.status === 403 ? ` Share the spreadsheet with ${googleSheetsConfig.serviceAccountEmail} as Editor and ensure the Google Sheets API is enabled.` : '';
     const code = response.status === 403 ? 'GOOGLE_SHEETS_PERMISSION_DENIED' : response.status === 404 ? 'GOOGLE_SPREADSHEET_NOT_FOUND' : response.status === 429 ? 'GOOGLE_SHEETS_RATE_LIMITED' : 'GOOGLE_SHEETS_API_ERROR';
-    throw new AppError(`${payload?.error?.message || 'Google Sheets API request failed.'}${permissionHint}`, { status: response.status === 404 ? 503 : response.status, code, details: { step: 'spreadsheet-request', googleStatus: response.status, googleResponse: safeGooglePayload(payload) }, expose: true });
+    const error = new AppError(`${payload?.error?.message || 'Google Sheets API request failed.'}${permissionHint}`, { status: response.status === 404 ? 503 : response.status, code, details: { step: 'spreadsheet-request', googleStatus: response.status, googleResponse: safeGooglePayload(payload) }, expose: true });
+    googleCredentialProvider.markFailure(error);
+    throw error;
   }
   logger.info('google-sheets.request', { operation: options.method || 'GET', resource: String(path).split('?')[0], status: response.status, attempt: attempt + 1, durationMs: Math.round(performance.now() - started) });
   return payload;
@@ -331,12 +305,13 @@ export async function diagnoseGoogleSheetsConnection() {
   const spreadsheet = await spreadsheetMetadata(true);
   const worksheets = (spreadsheet.sheets || []).map((sheet) => sheet.properties.title);
   const missingWorksheets = Object.keys(SHEETS).filter((title) => !worksheets.includes(title));
-  return { connected: true, spreadsheet: spreadsheet.properties?.title || 'Untitled', worksheetCount: worksheets.length, worksheets, missingWorksheets, scope: GOOGLE_SCOPE };
+  const title = spreadsheet.properties?.title || 'Untitled';
+  googleCredentialProvider.markSpreadsheetConnected(title, worksheets.length);
+  return { connected: true, spreadsheet: title, worksheetCount: worksheets.length, worksheets, missingWorksheets, scope: GOOGLE_SCOPE };
 }
 
 export function resetGoogleSheetsConnection() {
-  cachedToken = undefined;
-  tokenExpiresAt = 0;
+  googleCredentialProvider.authClient = null;
   initialization = undefined;
   metadataCache = undefined;
   metadataExpiresAt = 0;

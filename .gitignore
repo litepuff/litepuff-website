@@ -7,6 +7,10 @@ coverage/
 logs/
 *.log
 
+google-auth.json
+*.json.key
+service-account.json
+
 .env
 .env.*
 !.env.example

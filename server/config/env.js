@@ -2,11 +2,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export function normalizeGooglePrivateKey(value = '') {
-  const key = String(value).trim();
-  return key.includes('\\n') ? key.replace(/\\n/g, '\n') : key;
-}
-
 export const env = {
   port: process.env.PORT || 5000,
   clientUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -47,15 +42,6 @@ export const env = {
   instagramUrl: process.env.INSTAGRAM_URL || '',
   gstNumber: process.env.GST_NUMBER || '',
   businessAddress: process.env.BUSINESS_ADDRESS || '',
-  googleSheetId: process.env.GOOGLE_SHEET_ID || '',
-  googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_SERVICE_EMAIL || '',
-  googlePrivateKey: normalizeGooglePrivateKey(process.env.GOOGLE_PRIVATE_KEY),
-  googleProjectId: process.env.GOOGLE_PROJECT_ID || '',
-  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-  googleClientCertUrl: process.env.GOOGLE_CLIENT_CERT_URL || '',
-  googleTokenUri: process.env.GOOGLE_TOKEN_URI || 'https://oauth2.googleapis.com/token',
-  googleAuthUri: process.env.GOOGLE_AUTH_URI || 'https://accounts.google.com/o/oauth2/auth',
-  googlePrivateKeyId: process.env.GOOGLE_PRIVATE_KEY_ID || '',
   whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
   whatsappBusinessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',

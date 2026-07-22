@@ -20,7 +20,6 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import { csrfArchitectureGuard, securityStack, webhookLimiter } from './middleware/securityMiddleware.js';
 import { paymentWebhook } from './controllers/paymentController.js';
 import healthRoutes from './routes/healthRoutes.js';
-import debugRoutes from './routes/debugRoutes.js';
 import { responseEnvelope } from './middleware/responseMiddleware.js';
 import { errorHandler, notFoundHandler } from './middleware/errorMiddleware.js';
 import { logger, requestLogger } from './utils/logger.js';
@@ -30,6 +29,7 @@ import { otpService } from './services/auth/OTPService.js';
 import { AppError } from './utils/AppError.js';
 import { googleSheetsConfig } from './config/GoogleSheetsConfig.js';
 import { googleSheetsService } from './services/GoogleSheetsService.js';
+import { googleCredentialProvider } from './config/GoogleCredentialProvider.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,7 +87,6 @@ app.use(requestLogger);
 app.use('/uploads', express.static(uploadFolder));
 
 app.use('/api/health', healthRoutes);
-app.use('/api/debug', debugRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
@@ -125,11 +124,16 @@ export function startServer(port = env.port) {
   otpService.startCleanup();
   return app.listen(port, async () => {
     logger.info('server.started', { port, environment: env.nodeEnv });
-    logger.info('google-sheets.credentials.loaded', { configured: googleSheetsConfig.credentialsConfigured, principal: env.googleServiceAccountEmail, spreadsheetIdSuffix: env.googleSheetId.slice(-6) });
+    const credentialState = googleCredentialProvider.diagnostics();
+    logger.info('google.credentials.loaded', { source: credentialState.credentialSource, configured: googleSheetsConfig.credentialsConfigured, clientEmail: credentialState.clientEmail, fingerprint: credentialState.credentialFingerprint });
     try {
+      googleCredentialProvider.getAuthClient();
+      logger.info('google.jwt.created', { source: credentialState.credentialSource, clientEmail: credentialState.clientEmail });
       const diagnostic = await googleSheetsService.diagnose();
+      logger.info('google.authenticated', { source: credentialState.credentialSource, clientEmail: credentialState.clientEmail });
       logger.info('google-sheets.startup.connected', { spreadsheet: diagnostic.spreadsheet, worksheetCount: diagnostic.worksheetCount, worksheets: diagnostic.worksheets, missingWorksheets: diagnostic.missingWorksheets });
     } catch (error) {
+      googleCredentialProvider.markFailure(error);
       logger.error('google-sheets.startup.failed', { code: error.code, status: error.status, error: error.message, details: error.details, stack: error.stack });
     }
   });

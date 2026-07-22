@@ -2,6 +2,7 @@ import { createRequire } from 'module';
 import { env } from '../config/env.js';
 import { REQUIRED_SHEETS } from '../config/sheets.js';
 import { googleSheetsService } from '../services/GoogleSheetsService.js';
+import { googleCredentialProvider } from '../config/GoogleCredentialProvider.js';
 import { fail, ok } from '../utils/apiResponse.js';
 const require = createRequire(import.meta.url); const { version } = require('../../package.json');
 
@@ -12,9 +13,16 @@ function googleFailure(error) {
 export async function health(request, response) {
   let googleSheetsDetails;
   try { googleSheetsDetails = await googleSheetsService.diagnose(); } catch (error) { googleSheetsDetails = googleFailure(error); }
-  const data = { server: 'running', version, environment: env.nodeEnv, uptime: Number(process.uptime().toFixed(2)), timestamp: new Date().toISOString(), environmentLoaded: true, googleSheets: googleSheetsDetails.connected ? 'connected' : 'disabled' };
+  const googleStatus = googleSheetsDetails.connected ? 'connected' : 'disabled';
+  const data = { server: 'running', version, environment: env.nodeEnv, uptime: Number(process.uptime().toFixed(2)), timestamp: new Date().toISOString(), environmentLoaded: true, google: googleStatus, googleSheets: googleStatus };
+  if (googleSheetsDetails.connected) data.spreadsheet = googleSheetsDetails.spreadsheet;
   if (!googleSheetsDetails.connected) data.reason = googleSheetsDetails.reason;
   ok(response, data, googleSheetsDetails.connected ? 'Server is healthy.' : 'Server is running with Google Sheets disabled.');
+}
+
+export async function googleHealth(request, response) {
+  try { await googleSheetsService.diagnose(); } catch (error) { googleCredentialProvider.markFailure(error); }
+  ok(response, googleCredentialProvider.diagnostics(), 'Google integration diagnostics.');
 }
 
 export async function googleSheetsHealth(request, response) {
