@@ -10,9 +10,11 @@ function googleFailure(error) {
 }
 
 export async function health(request, response) {
-  let googleSheets;
-  try { googleSheets = await googleSheetsService.diagnose(); } catch (error) { googleSheets = googleFailure(error); }
-  ok(response, { server: 'LitePuff API', version, environment: env.nodeEnv, uptime: Number(process.uptime().toFixed(2)), timestamp: new Date().toISOString(), environmentLoaded: true, googleSheets }, googleSheets.connected ? 'Server is healthy.' : 'Server is running but Google Sheets is unavailable.');
+  let googleSheetsDetails;
+  try { googleSheetsDetails = await googleSheetsService.diagnose(); } catch (error) { googleSheetsDetails = googleFailure(error); }
+  const data = { server: 'running', version, environment: env.nodeEnv, uptime: Number(process.uptime().toFixed(2)), timestamp: new Date().toISOString(), environmentLoaded: true, googleSheets: googleSheetsDetails.connected ? 'connected' : 'disabled' };
+  if (!googleSheetsDetails.connected) data.reason = googleSheetsDetails.reason;
+  ok(response, data, googleSheetsDetails.connected ? 'Server is healthy.' : 'Server is running with Google Sheets disabled.');
 }
 
 export async function googleSheetsHealth(request, response) {

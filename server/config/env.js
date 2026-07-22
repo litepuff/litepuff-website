@@ -86,10 +86,7 @@ export function validateProductionEnv() {
     COOKIE_SECRET: env.cookieSecret,
     OTP_SECRET: env.otpSecret,
     FRONTEND_URL: env.clientUrl,
-    BACKEND_URL: env.backendUrl,
-    GOOGLE_SHEET_ID: env.googleSheetId,
-    'GOOGLE_SERVICE_ACCOUNT_EMAIL (or GOOGLE_SERVICE_EMAIL)': env.googleServiceAccountEmail,
-    GOOGLE_PRIVATE_KEY: env.googlePrivateKey
+    BACKEND_URL: env.backendUrl
   };
   const missing = Object.entries(required).filter(([, value]) => !value).map(([key]) => key);
   if (missing.length) throw new Error(`Missing production environment variables: ${missing.join(', ')}`);
