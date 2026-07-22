@@ -20,6 +20,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import { csrfArchitectureGuard, securityStack, webhookLimiter } from './middleware/securityMiddleware.js';
 import { paymentWebhook } from './controllers/paymentController.js';
 import healthRoutes from './routes/healthRoutes.js';
+import debugRoutes from './routes/debugRoutes.js';
 import { responseEnvelope } from './middleware/responseMiddleware.js';
 import { errorHandler, notFoundHandler } from './middleware/errorMiddleware.js';
 import { logger, requestLogger } from './utils/logger.js';
@@ -86,6 +87,7 @@ app.use(requestLogger);
 app.use('/uploads', express.static(uploadFolder));
 
 app.use('/api/health', healthRoutes);
+app.use('/api/debug', debugRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
