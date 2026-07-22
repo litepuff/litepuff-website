@@ -41,6 +41,7 @@ import { activityLogger } from '../services/activityLogService.js';
 import { authLimiter } from '../middleware/securityMiddleware.js';
 import { adminCancelShipment, adminCreateShipment, adminTrackShipment } from '../controllers/shippingController.js';
 import { PERMISSIONS } from '../config/auth.js';
+import adminWhatsAppRoutes from './adminWhatsAppRoutes.js';
 
 const router = express.Router();
 const handle = (controller) => (request, response, next) => Promise.resolve(controller(request, response, next)).catch(next);
@@ -51,6 +52,7 @@ router.get('/profile', protectAdminRoute, handle(getAdminProfile));
 router.put('/profile', protectAdminRoute, handle(updateAdminProfile));
 
 router.use(protectAdminRoute);
+router.use('/whatsapp', adminWhatsAppRoutes);
 
 router.get('/dashboard', requirePermission(PERMISSIONS.ADMIN_DASHBOARD_VIEW), handle(getAdminDashboard));
 

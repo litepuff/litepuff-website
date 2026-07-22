@@ -5,7 +5,9 @@ export const SHEET_NAMES = Object.freeze({
   PAYMENTS: 'PAYMENTS', ORDER_TRACKING: 'ORDER_TRACKING', COUPONS: 'COUPONS',
   BLOGS: 'BLOGS', BLOG_CATEGORIES: 'BLOG_CATEGORIES', FAQ: 'FAQ', REVIEWS: 'REVIEWS',
   CONTACT_MESSAGES: 'CONTACT_MESSAGES', NEWSLETTER: 'NEWSLETTER', SETTINGS: 'SETTINGS',
-  SHIPMENTS: 'SHIPMENTS', NOTIFICATIONS: 'NOTIFICATIONS', AUTH_AUDIT: 'AUTH_AUDIT', SESSIONS: 'SESSIONS', OTP_CHALLENGES: 'OTP_CHALLENGES', IDENTITY_VERIFICATIONS: 'IDENTITY_VERIFICATIONS'
+  SHIPMENTS: 'SHIPMENTS', NOTIFICATIONS: 'NOTIFICATIONS', AUTH_AUDIT: 'AUTH_AUDIT', SESSIONS: 'SESSIONS', OTP_CHALLENGES: 'OTP_CHALLENGES', IDENTITY_VERIFICATIONS: 'IDENTITY_VERIFICATIONS',
+  WHATSAPP_CONVERSATIONS: 'WHATSAPP_CONVERSATIONS', WHATSAPP_SESSIONS: 'WHATSAPP_SESSIONS',
+  WHATSAPP_MESSAGES: 'WHATSAPP_MESSAGES', WHATSAPP_CAMPAIGNS: 'WHATSAPP_CAMPAIGNS', WHATSAPP_TEMPLATES: 'WHATSAPP_TEMPLATES'
 });
 
 export const SHEET_SCHEMAS = Object.freeze({
@@ -34,7 +36,12 @@ export const SHEET_SCHEMAS = Object.freeze({
   AUTH_AUDIT: ['AuditID', 'FirebaseUID', 'CustomerID', 'Event', 'IPHash', 'UserAgent', 'CreatedAt', 'ActorID', 'ActorRole', 'Permission', 'Resource', 'Action', 'Decision', 'RequestID', 'Metadata'],
   SESSIONS: ['SessionID', 'CustomerID', 'Role', 'RefreshTokenHash', 'Status', 'CreatedAt', 'LastActivity', 'ExpiresAt', 'UserAgent', 'IPAddress', 'TerminatedAt', 'TerminationReason', 'TrustedAt'],
   OTP_CHALLENGES: ['OTPID', 'CustomerID', 'Identifier', 'Provider', 'OTPHash', 'Purpose', 'CreatedAt', 'ExpiresAt', 'Attempts', 'ResendCount', 'Status', 'LastSentAt', 'LockedUntil', 'VerifiedAt', 'DeliveryStatus', 'ProviderMessageID'],
-  IDENTITY_VERIFICATIONS: ['VerificationID', 'CustomerID', 'Channel', 'IdentifierHash', 'Purpose', 'Method', 'Source', 'VerifiedAt']
+  IDENTITY_VERIFICATIONS: ['VerificationID', 'CustomerID', 'Channel', 'IdentifierHash', 'Purpose', 'Method', 'Source', 'VerifiedAt'],
+  WHATSAPP_CONVERSATIONS: ['ConversationID', 'CustomerID', 'Phone', 'Status', 'CurrentIntent', 'CurrentStep', 'LastMessageID', 'LastMessageType', 'LastMessageAt', 'CreatedAt', 'UpdatedAt', 'ClosedAt', 'Metadata', 'UnreadCount', 'IsPinned', 'AssignedTo', 'AssignedAt', 'ResolvedAt'],
+  WHATSAPP_SESSIONS: ['WhatsAppSessionID', 'ConversationID', 'CustomerID', 'Phone', 'Status', 'Authenticated', 'CreatedAt', 'LastActivity', 'ExpiresAt', 'ClosedAt'],
+  WHATSAPP_MESSAGES: ['MessageID', 'ConversationID', 'CustomerID', 'Phone', 'Direction', 'MessageType', 'Content', 'ProviderMessageID', 'DeliveryID', 'DeliveryStatus', 'Unread', 'CampaignID', 'TemplateName', 'RetryCount', 'ErrorCode', 'CreatedAt', 'SentAt', 'DeliveredAt', 'ReadAt', 'FailedAt', 'DeletedAt', 'Metadata'],
+  WHATSAPP_CAMPAIGNS: ['CampaignID', 'Name', 'TemplateName', 'Audience', 'Status', 'ScheduledAt', 'CreatedBy', 'CreatedAt', 'UpdatedAt', 'PausedAt', 'CompletedAt', 'TotalRecipients', 'Queued', 'Sent', 'Delivered', 'Read', 'Failed', 'Metadata'],
+  WHATSAPP_TEMPLATES: ['TemplateID', 'Name', 'MetaTemplateID', 'Category', 'Language', 'Status', 'Components', 'Preview', 'UsageCount', 'LastSyncedAt', 'CreatedAt', 'UpdatedAt']
 });
 
 export const SHEET_RULES = Object.freeze({
@@ -59,14 +66,19 @@ export const SHEET_RULES = Object.freeze({
   NOTIFICATIONS: { primaryKey: 'NotificationID' }, AUTH_AUDIT: { primaryKey: 'AuditID' },
   SESSIONS: { primaryKey: 'SessionID', foreign: { CustomerID: ['CUSTOMERS', 'CustomerID'] } },
   OTP_CHALLENGES: { primaryKey: 'OTPID', numeric: ['Attempts', 'ResendCount'] },
-  IDENTITY_VERIFICATIONS: { primaryKey: 'VerificationID', foreign: { CustomerID: ['CUSTOMERS', 'CustomerID'] } }
+  IDENTITY_VERIFICATIONS: { primaryKey: 'VerificationID', foreign: { CustomerID: ['CUSTOMERS', 'CustomerID'] } },
+  WHATSAPP_CONVERSATIONS: { primaryKey: 'ConversationID' },
+  WHATSAPP_SESSIONS: { primaryKey: 'WhatsAppSessionID', unique: [['ConversationID']] },
+  WHATSAPP_MESSAGES: { primaryKey: 'MessageID', foreign: { ConversationID: ['WHATSAPP_CONVERSATIONS', 'ConversationID'] }, numeric: ['RetryCount'] },
+  WHATSAPP_CAMPAIGNS: { primaryKey: 'CampaignID', numeric: ['TotalRecipients', 'Queued', 'Sent', 'Delivered', 'Read', 'Failed'] },
+  WHATSAPP_TEMPLATES: { primaryKey: 'TemplateID', unique: [['Name', 'Language']], numeric: ['UsageCount'] }
 });
 
 export const SHEET_DEPENDENCIES = Object.freeze({
-  CUSTOMERS: [['CART', 'CustomerID'], ['WISHLIST', 'CustomerID'], ['ADDRESSES', 'CustomerID'], ['ORDERS', 'CustomerID'], ['PAYMENTS', 'CustomerID'], ['REVIEWS', 'CustomerID'], ['SESSIONS', 'CustomerID'], ['IDENTITY_VERIFICATIONS', 'CustomerID']],
+  CUSTOMERS: [['CART', 'CustomerID'], ['WISHLIST', 'CustomerID'], ['ADDRESSES', 'CustomerID'], ['ORDERS', 'CustomerID'], ['PAYMENTS', 'CustomerID'], ['REVIEWS', 'CustomerID'], ['SESSIONS', 'CustomerID'], ['IDENTITY_VERIFICATIONS', 'CustomerID'], ['WHATSAPP_CONVERSATIONS', 'CustomerID'], ['WHATSAPP_SESSIONS', 'CustomerID'], ['WHATSAPP_MESSAGES', 'CustomerID']],
   PRODUCTS: [['PRODUCT_IMAGES', 'ProductID'], ['INVENTORY', 'ProductID'], ['CART', 'ProductID'], ['WISHLIST', 'ProductID'], ['ORDER_ITEMS', 'ProductID'], ['REVIEWS', 'ProductID']],
   ADDRESSES: [['ORDERS', 'AddressID']], ORDERS: [['ORDER_ITEMS', 'OrderID'], ['PAYMENTS', 'OrderID'], ['ORDER_TRACKING', 'OrderID'], ['SHIPMENTS', 'OrderID'], ['REVIEWS', 'OrderID']]
 });
 
 export const COLUMN_ALIASES = Object.freeze({ PAYMENTS: { RazorpayPaymentID: ['TransactionID'] }, CUSTOMERS: { Provider: ['GoogleAuth'] } });
-export const REQUIRED_SHEETS = Object.freeze(['PRODUCTS', 'INVENTORY', 'ORDERS', 'CUSTOMERS', 'COUPONS', 'BLOGS', 'NEWSLETTER', 'SETTINGS', 'SESSIONS', 'OTP_CHALLENGES', 'IDENTITY_VERIFICATIONS']);
+export const REQUIRED_SHEETS = Object.freeze(['PRODUCTS', 'INVENTORY', 'ORDERS', 'CUSTOMERS', 'COUPONS', 'BLOGS', 'NEWSLETTER', 'SETTINGS', 'SESSIONS', 'OTP_CHALLENGES', 'IDENTITY_VERIFICATIONS', 'WHATSAPP_CONVERSATIONS', 'WHATSAPP_SESSIONS', 'WHATSAPP_MESSAGES', 'WHATSAPP_CAMPAIGNS', 'WHATSAPP_TEMPLATES']);

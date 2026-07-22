@@ -1,0 +1,26 @@
+import { dashboardService } from '../services/DashboardService.js';
+import { analyticsService } from '../services/AnalyticsService.js';
+import { ok, created } from '../utils/apiResponse.js';
+
+const actorId = (request) => request.admin?.id || request.admin?.sub || request.admin?.email || 'admin';
+export const listConversations = async (req, res) => ok(res, await dashboardService.conversationsList(req.query), 'WhatsApp conversations.');
+export const getConversation = async (req, res) => ok(res, await dashboardService.conversationDetail(req.params.id), 'WhatsApp conversation detail.');
+export const listMessages = async (req, res) => ok(res, await dashboardService.messagesList(req.query), 'WhatsApp messages.');
+export const search = async (req, res) => ok(res, await dashboardService.search(req.query.q), 'WhatsApp admin search.');
+export const updateConversation = async (req, res) => ok(res, await dashboardService.updateConversation(req.params.id, req.body.action, req.body.value, actorId(req)), 'Conversation updated.');
+export const listCustomers = async (req, res) => ok(res, await dashboardService.customersList(req.query), 'WhatsApp customers.');
+export const getCustomer = async (req, res) => ok(res, await dashboardService.customerDetail(req.params.id), 'WhatsApp customer detail.');
+export const sendMessage = async (req, res) => created(res, await dashboardService.send(req.body), 'WhatsApp message queued.');
+export const resendMessage = async (req, res) => created(res, await dashboardService.resend(req.params.id), 'WhatsApp message requeued.');
+export const deleteMessage = async (req, res) => ok(res, await dashboardService.deleteMessage(req.params.id), 'WhatsApp message deleted.');
+export const bulkSend = async (req, res) => ok(res, await dashboardService.bulk(req.body), 'Bulk send completed.');
+export const listCampaigns = async (req, res) => ok(res, await dashboardService.campaignsList(req.query), 'WhatsApp campaigns.');
+export const createCampaign = async (req, res) => created(res, await dashboardService.createCampaign(req.body, actorId(req)), 'Campaign created.');
+export const updateCampaign = async (req, res) => ok(res, await dashboardService.updateCampaign(req.params.id, req.body), 'Campaign updated.');
+export const deleteCampaign = async (req, res) => ok(res, await dashboardService.deleteCampaign(req.params.id), 'Campaign deleted.');
+export const campaignAction = async (req, res) => ok(res, await dashboardService.changeCampaignStatus(req.params.id, req.params.action === 'resume' ? 'running' : req.params.action === 'schedule' ? 'scheduled' : req.params.action), 'Campaign status updated.');
+export const campaignStats = async (req, res) => ok(res, await dashboardService.campaignStats(req.params.id), 'Campaign statistics.');
+export const listTemplates = async (req, res) => ok(res, await dashboardService.templatesList(req.query), 'WhatsApp templates.');
+export const syncTemplates = async (req, res) => ok(res, await dashboardService.syncTemplates(), 'WhatsApp templates synchronized.');
+export const analytics = async (req, res) => ok(res, await analyticsService.get(), 'WhatsApp analytics.');
+export const exportData = async (req, res) => { const file = await dashboardService.export(req.params.resource, req.params.format, req.query); res.setHeader('Content-Type', file.mime); res.setHeader('Content-Disposition', `attachment; filename="whatsapp-${req.params.resource}.${file.extension}"`); res.status(200).send(file.body); };

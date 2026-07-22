@@ -20,6 +20,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import { csrfArchitectureGuard, securityStack, webhookLimiter } from './middleware/securityMiddleware.js';
 import { paymentWebhook } from './controllers/paymentController.js';
 import healthRoutes from './routes/healthRoutes.js';
+import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
 import { responseEnvelope } from './middleware/responseMiddleware.js';
 import { errorHandler, notFoundHandler } from './middleware/errorMiddleware.js';
 import { logger, requestLogger } from './utils/logger.js';
@@ -30,6 +31,8 @@ import { AppError } from './utils/AppError.js';
 import { googleSheetsConfig } from './config/GoogleSheetsConfig.js';
 import { googleSheetsService } from './services/GoogleSheetsService.js';
 import { googleCredentialProvider } from './config/GoogleCredentialProvider.js';
+import { whatsAppConfig } from './config/WhatsAppConfig.js';
+import { whatsAppHealthService } from './services/WhatsAppHealthService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,7 +71,8 @@ validateProductionEnv();
 ensureFrontendBuild();
 
 if (!env.smtpHost || !env.smtpUser || !env.smtpPass) logger.warn('integration.email.disabled', { reason: 'not-configured' });
-if (!env.whatsappAccessToken || !env.whatsappPhoneNumberId || !env.whatsappBusinessAccountId) logger.warn('integration.whatsapp.disabled', { reason: 'not-configured' });
+if (whatsAppConfig.configured) logger.info('integration.whatsapp.configured', { apiVersion: whatsAppConfig.metaApiVersion, webhookConfigured: whatsAppConfig.webhookConfigured });
+else logger.warn('integration.whatsapp.disabled', { reason: whatsAppConfig.disabledReason, missing: whatsAppConfig.validation.missing, invalid: whatsAppConfig.validation.invalid });
 
 const app = express();
 
@@ -77,6 +81,7 @@ app.disable('x-powered-by');
 const allowedOrigins = new Set([env.clientUrl, env.appUrl].filter(Boolean));
 app.use(cors({ origin: (origin, callback) => !origin || allowedOrigins.has(origin) ? callback(null, true) : callback(new AppError('Request origin is not allowed.', { status: 403, code: 'CORS_ORIGIN_REJECTED' })), credentials: true }));
 app.post('/api/payment/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '256kb' }), (request, response, next) => Promise.resolve(paymentWebhook(request, response, next)).catch(next));
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser(env.cookieSecret));
 app.use(securityStack);
@@ -129,12 +134,20 @@ export function startServer(port = env.port) {
     try {
       googleCredentialProvider.getAuthClient();
       logger.info('google.jwt.created', { source: credentialState.credentialSource, clientEmail: credentialState.clientEmail });
+      await googleSheetsService.synchronize({ removeUnused: false });
       const diagnostic = await googleSheetsService.diagnose();
       logger.info('google.authenticated', { source: credentialState.credentialSource, clientEmail: credentialState.clientEmail });
       logger.info('google-sheets.startup.connected', { spreadsheet: diagnostic.spreadsheet, worksheetCount: diagnostic.worksheetCount, worksheets: diagnostic.worksheets, missingWorksheets: diagnostic.missingWorksheets });
     } catch (error) {
       googleCredentialProvider.markFailure(error);
       logger.error('google-sheets.startup.failed', { code: error.code, status: error.status, error: error.message, details: error.details, stack: error.stack });
+    }
+    try {
+      const diagnostic = await whatsAppHealthService.check();
+      if (diagnostic.connected) logger.info('whatsapp.startup.connected', { apiVersion: diagnostic.apiVersion, webhookConfigured: diagnostic.webhookConfigured });
+      else logger.warn('whatsapp.startup.disabled', { reason: diagnostic.reason || diagnostic.lastError || 'Connection validation failed.' });
+    } catch (error) {
+      logger.warn('whatsapp.startup.disabled', { reason: error.message });
     }
   });
 }

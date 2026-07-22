@@ -42,18 +42,6 @@ export const env = {
   instagramUrl: process.env.INSTAGRAM_URL || '',
   gstNumber: process.env.GST_NUMBER || '',
   businessAddress: process.env.BUSINESS_ADDRESS || '',
-  whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
-  whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
-  whatsappBusinessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
-  whatsappTemplateLanguage: process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US',
-  whatsappAuthTemplate: process.env.WHATSAPP_AUTH_TEMPLATE || 'litepuff_authentication',
-  whatsappOrderTemplate: process.env.WHATSAPP_ORDER_TEMPLATE || 'litepuff_order_confirmation',
-  whatsappShippingTemplate: process.env.WHATSAPP_SHIPPING_TEMPLATE || 'litepuff_shipping_update',
-  whatsappMarketingTemplate: process.env.WHATSAPP_MARKETING_TEMPLATE || 'litepuff_marketing',
-  whatsappAuthCodeButton: String(process.env.WHATSAPP_AUTH_CODE_BUTTON || 'true').toLowerCase() === 'true',
-  whatsappTimeoutMs: Number(process.env.WHATSAPP_TIMEOUT_MS || 10000),
-  whatsappMaxRetries: Number(process.env.WHATSAPP_MAX_RETRIES || 2),
-  metaApiVersion: process.env.META_API_VERSION || 'v23.0',
   shiprocketEmail: process.env.SHIPROCKET_EMAIL || '',
   shiprocketPassword: process.env.SHIPROCKET_PASSWORD || '',
   shiprocketPickupLocation: process.env.SHIPROCKET_PICKUP_LOCATION || 'Primary',
@@ -88,5 +76,4 @@ export function validateProductionEnv() {
   if (!Number.isFinite(env.accessTokenMinutes) || env.accessTokenMinutes <= 0) throw new Error('ACCESS_TOKEN_MINUTES must be a positive number.');
   if (!Number.isFinite(env.refreshTokenDays) || env.refreshTokenDays <= 0) throw new Error('REFRESH_TOKEN_DAYS must be a positive number.');
   if (![env.otpExpiresMinutes, env.otpCooldownSeconds, env.otpMaxAttempts, env.otpMaxResends, env.otpLockMinutes, env.otpCleanupIntervalMinutes].every((value) => Number.isFinite(value) && value > 0)) throw new Error('OTP policy values must be positive numbers.');
-  if (!Number.isFinite(env.whatsappTimeoutMs) || env.whatsappTimeoutMs <= 0 || !Number.isInteger(env.whatsappMaxRetries) || env.whatsappMaxRetries < 0) throw new Error('WhatsApp timeout and retry settings are invalid.');
 }

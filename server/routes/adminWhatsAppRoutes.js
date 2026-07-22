@@ -1,0 +1,36 @@
+import express from 'express';
+import { requirePermission } from '../middleware/authMiddleware.js';
+import { auditEvent } from '../services/activityLogService.js';
+import { PERMISSIONS } from '../config/auth.js';
+import * as controller from '../controllers/WhatsAppAdminController.js';
+
+const router = express.Router();
+const handle = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const read = requirePermission(PERMISSIONS.ADMIN_DASHBOARD_VIEW);
+const manage = requirePermission(PERMISSIONS.ADMIN_SETTINGS_MANAGE);
+const campaigns = requirePermission(PERMISSIONS.ADMIN_COUPONS_MANAGE);
+const analytics = requirePermission(PERMISSIONS.ADMIN_ANALYTICS_VIEW);
+
+router.get('/conversations', read, handle(controller.listConversations));
+router.get('/conversations/:id', read, handle(controller.getConversation));
+router.get('/messages', read, handle(controller.listMessages));
+router.get('/search', read, handle(controller.search));
+router.patch('/conversations/:id', manage, auditEvent('whatsapp.conversation.updated', 'WhatsApp'), handle(controller.updateConversation));
+router.get('/customers', read, handle(controller.listCustomers));
+router.get('/customers/:id', read, handle(controller.getCustomer));
+router.post('/messages', manage, auditEvent('whatsapp.message.sent', 'WhatsApp'), handle(controller.sendMessage));
+router.post('/messages/bulk', manage, auditEvent('whatsapp.bulk.sent', 'WhatsApp'), handle(controller.bulkSend));
+router.post('/messages/:id/resend', manage, auditEvent('whatsapp.message.resent', 'WhatsApp'), handle(controller.resendMessage));
+router.post('/messages/:id/retry', manage, auditEvent('whatsapp.message.retried', 'WhatsApp'), handle(controller.resendMessage));
+router.delete('/messages/:id', manage, auditEvent('whatsapp.message.deleted', 'WhatsApp'), handle(controller.deleteMessage));
+router.get('/campaigns', campaigns, handle(controller.listCampaigns));
+router.post('/campaigns', campaigns, auditEvent('whatsapp.campaign.created', 'WhatsApp'), handle(controller.createCampaign));
+router.put('/campaigns/:id', campaigns, auditEvent('whatsapp.campaign.updated', 'WhatsApp'), handle(controller.updateCampaign));
+router.delete('/campaigns/:id', campaigns, auditEvent('whatsapp.campaign.deleted', 'WhatsApp'), handle(controller.deleteCampaign));
+router.post('/campaigns/:id/:action(schedule|pause|resume)', campaigns, auditEvent('whatsapp.campaign.status', 'WhatsApp'), handle(controller.campaignAction));
+router.get('/campaigns/:id/stats', analytics, handle(controller.campaignStats));
+router.get('/templates', read, handle(controller.listTemplates));
+router.post('/templates/sync', manage, auditEvent('whatsapp.templates.synced', 'WhatsApp'), handle(controller.syncTemplates));
+router.get('/analytics', analytics, handle(controller.analytics));
+router.get('/exports/:resource(conversations|messages|campaigns)/:format(csv|xlsx|json)', analytics, auditEvent('whatsapp.data.exported', 'WhatsApp'), handle(controller.exportData));
+export default router;

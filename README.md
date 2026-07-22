@@ -58,6 +58,18 @@ Required production configuration includes application URLs, four independent au
 8. Ensure `server/uploads` is persistent and writable.
 9. Verify `/api/health` and `/api/health/google-sheets`.
 
+## Meta WhatsApp infrastructure
+
+The production webhook callback is `https://litepuff.in/api/webhooks/whatsapp`. Meta verification uses `WHATSAPP_VERIFY_TOKEN`; signed POST events require `META_APP_SECRET` and are validated with `X-Hub-Signature-256` before JSON parsing. Sanitized diagnostics are available at `/api/health/whatsapp`.
+
+Configure these values in Hostinger, never in Git: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_VERIFY_TOKEN`, and `META_APP_SECRET`. Optional operational settings are `META_API_VERSION`, `WHATSAPP_TIMEOUT_MS`, `WHATSAPP_MAX_RETRIES`, and `WHATSAPP_TEMPLATE_LANGUAGE`. Incomplete WhatsApp configuration disables the integration without stopping Express.
+
+See [WHATSAPP_INFRASTRUCTURE.md](WHATSAPP_INFRASTRUCTURE.md) for deployment, Meta configuration, endpoint, and security details.
+
+All backend WhatsApp delivery goes through `WhatsAppMessagingService`. It supports templates, text, image, document/PDF, video, audio, sticker, location, contacts, and interactive payloads with strict E.164 validation, an immediate queue adapter, bounded retries, and delivery lifecycle metadata. Future queue implementations can replace the adapter without changing business modules.
+
+Verified incoming WhatsApp events use `WebhookEventProcessor`, a common message parser, isolated type handlers, rule-based intent classification, and persistent conversation/session repositories. The guarded Google startup check provisions `WHATSAPP_CONVERSATIONS` and `WHATSAPP_SESSIONS` without removing existing sheets; `npm run sheets:sync` remains available for manual synchronization. Session inactivity is controlled by `WHATSAPP_SESSION_TIMEOUT_MINUTES` (default: 30).
+
 Detailed instructions are in [HOSTINGER_DEPLOYMENT.md](HOSTINGER_DEPLOYMENT.md).
 
 ## Structure

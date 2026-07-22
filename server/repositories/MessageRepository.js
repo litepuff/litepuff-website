@@ -1,0 +1,18 @@
+import { googleSheetsService } from '../services/GoogleSheetsService.js';
+import { SHEET_NAMES } from '../config/sheets.js';
+import { createId } from '../utils/createId.js';
+
+const asBoolean = (value) => value === true || String(value).toLowerCase() === 'true';
+
+export class MessageRepository {
+  constructor({ sheets = googleSheetsService, clock = () => new Date() } = {}) { this.sheets = sheets; this.clock = clock; this.sheet = SHEET_NAMES.WHATSAPP_MESSAGES; }
+  findById(id) { return this.sheets.readOne(this.sheet, (row) => row.MessageID === id && !row.DeletedAt); }
+  findByProviderId(id) { return this.sheets.readOne(this.sheet, (row) => row.ProviderMessageID === id && !row.DeletedAt); }
+  async create(input) { const now = this.clock().toISOString(); const row = { MessageID: input.messageId || createId('wam'), ConversationID: input.conversationId || '', CustomerID: input.customerId || '', Phone: input.phone || '', Direction: input.direction || 'outbound', MessageType: input.messageType || 'text', Content: typeof input.content === 'string' ? input.content.slice(0, 4000) : JSON.stringify(input.content || {}).slice(0, 4000), ProviderMessageID: input.providerMessageId || '', DeliveryID: input.deliveryId || '', DeliveryStatus: input.deliveryStatus || 'queued', Unread: String(Boolean(input.unread)), CampaignID: input.campaignId || '', TemplateName: input.templateName || '', RetryCount: Number(input.retryCount || 0), ErrorCode: input.errorCode || '', CreatedAt: input.createdAt || now, SentAt: input.sentAt || '', DeliveredAt: '', ReadAt: '', FailedAt: '', DeletedAt: '', Metadata: JSON.stringify(input.metadata || {}) }; await this.sheets.append(this.sheet, row); return row; }
+  async update(id, changes) { const row = await this.findById(id); if (!row) return null; const updated = { ...row, ...changes }; await this.sheets.update(this.sheet, row._row, updated); return updated; }
+  async updateDelivery(providerMessageId, status) { const row = await this.findByProviderId(providerMessageId); if (!row) return null; const now = this.clock().toISOString(); const field = { sent: 'SentAt', delivered: 'DeliveredAt', read: 'ReadAt', failed: 'FailedAt' }[status]; return this.update(row.MessageID, { DeliveryStatus: status, ...(field ? { [field]: now } : {}) }); }
+  softDelete(id) { return this.update(id, { DeletedAt: this.clock().toISOString() }); }
+  async list({ search = '', conversationId, customerId, phone, type, status, campaignId, unread, from, to, page = 1, limit = 50 } = {}) { return this.sheets.readRows(this.sheet, { filter: (row) => !row.DeletedAt && (!conversationId || row.ConversationID === conversationId) && (!customerId || row.CustomerID === customerId) && (!phone || row.Phone === phone) && (!type || row.MessageType === type) && (!status || row.DeliveryStatus === status) && (!campaignId || row.CampaignID === campaignId) && (unread === undefined || asBoolean(row.Unread) === asBoolean(unread)) && (!from || new Date(row.CreatedAt) >= new Date(from)) && (!to || new Date(row.CreatedAt) <= new Date(to)), search: search ? { query: search, fields: ['MessageID', 'Phone', 'Content', 'ProviderMessageID', 'TemplateName'] } : undefined, sort: { field: 'CreatedAt', direction: 'desc' }, pagination: { page, limit } }); }
+  async markConversationRead(conversationId) { const { rows } = await this.sheets.readRows(this.sheet, { filter: (row) => row.ConversationID === conversationId && asBoolean(row.Unread) && !row.DeletedAt }); await Promise.all(rows.map((row) => this.update(row.MessageID, { Unread: 'false' }))); return rows.length; }
+}
+export const messageRepository = new MessageRepository();

@@ -1,23 +1,15 @@
-import { env } from '../../config/env.js';
-import { AppError } from '../../utils/AppError.js';
+import { whatsAppConfig } from '../../config/WhatsAppConfig.js';
+import { WhatsAppTemplateService } from '../WhatsAppTemplateService.js';
+import { TemplateMessageBuilder } from '../../builders/TemplateMessageBuilder.js';
 
 export const WHATSAPP_TEMPLATE_TYPES = Object.freeze({ AUTHENTICATION: 'authentication', ORDER_CONFIRMATION: 'order_confirmation', SHIPPING_UPDATE: 'shipping_update', MARKETING: 'marketing' });
-const text = (value) => ({ type: 'text', text: String(value) });
-const body = (values) => ({ type: 'body', parameters: values.map(text) });
-
 export class WhatsAppTemplateBuilder {
-  constructor(config = env) { this.config = config; }
+  constructor(config = whatsAppConfig) { this.config = config; this.templates = new WhatsAppTemplateService({ config }); this.builder = new TemplateMessageBuilder(); }
   build(type, variables = {}) {
-    const definitions = {
-      [WHATSAPP_TEMPLATE_TYPES.AUTHENTICATION]: () => ({ name: this.config.whatsappAuthTemplate, components: [body([variables.code, variables.expiresMinutes]), ...(this.config.whatsappAuthCodeButton ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [text(variables.code)] }] : [])] }),
-      [WHATSAPP_TEMPLATE_TYPES.ORDER_CONFIRMATION]: () => ({ name: this.config.whatsappOrderTemplate, components: [body([variables.orderNumber, variables.total])] }),
-      [WHATSAPP_TEMPLATE_TYPES.SHIPPING_UPDATE]: () => ({ name: this.config.whatsappShippingTemplate, components: [body([variables.orderNumber, variables.status, variables.trackingUrl])] }),
-      [WHATSAPP_TEMPLATE_TYPES.MARKETING]: () => ({ name: this.config.whatsappMarketingTemplate, components: [body([variables.firstName, variables.message])] })
-    };
-    const definition = definitions[type]; if (!definition) throw new AppError('WhatsApp template type is not supported.', { status: 422, code: 'WHATSAPP_TEMPLATE_TYPE_INVALID' });
-    const template = definition(); if (!template.name) throw new AppError('WhatsApp template is not configured.', { status: 503, code: 'WHATSAPP_TEMPLATE_NOT_CONFIGURED' });
-    return { name: template.name, language: { code: this.config.whatsappTemplateLanguage }, components: template.components };
+    const alias = type === WHATSAPP_TEMPLATE_TYPES.SHIPPING_UPDATE ? 'order_shipped' : type;
+    const resolved = this.templates.resolve(alias, { variables });
+    return this.builder.build({ to: '', name: resolved.name, language: this.config.whatsappTemplateLanguage, parameters: resolved.parameters, buttonParameters: this.config.whatsappAuthCodeButton ? resolved.buttonParameters : [] }).template;
   }
-  custom(name, parameters = []) { if (!name) throw new AppError('WhatsApp template is required.', { status: 422, code: 'WHATSAPP_TEMPLATE_REQUIRED' }); return { name, language: { code: this.config.whatsappTemplateLanguage }, components: [body(parameters)] }; }
+  custom(name, parameters = []) { const resolved = this.templates.resolve('custom', { name, parameters }); return this.builder.build({ to: '', name: resolved.name, language: this.config.whatsappTemplateLanguage, parameters: resolved.parameters }).template; }
 }
 export const whatsAppTemplateBuilder = new WhatsAppTemplateBuilder();

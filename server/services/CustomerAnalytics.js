@@ -1,0 +1,2 @@
+export class CustomerAnalytics { summarize(rows = [], now = Date.now()) { const month = new Date(now); month.setDate(1); month.setHours(0, 0, 0, 0); return { totalCustomers: rows.length, verifiedPhones: rows.filter((row) => String(row.PhoneVerified).toLowerCase() === 'true').length, activeCustomers: rows.filter((row) => String(row.Status).toLowerCase() === 'active').length, customerGrowthThisMonth: rows.filter((row) => new Date(row.CreatedAt).getTime() >= month.getTime()).length }; } }
+export const customerAnalytics = new CustomerAnalytics();
