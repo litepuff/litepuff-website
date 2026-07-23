@@ -50,7 +50,7 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="font-semibold text-[#243029]">{formatMoney(item.price)}</span>
             <span className="h-1 w-1 rounded-full bg-[#C89B3C]" aria-hidden="true" />
-            <span className="text-[#6B726D]">{item.weight || '80 g'}</span>
+            <span className="text-[#6B726D]">{item.weight || '70 g'}</span>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {['Roasted', 'Never Fried', 'Premium Ingredients'].map((feature) => (

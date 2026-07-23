@@ -42,7 +42,7 @@ export default function CouponInput({ onApply }) {
         />
         <button type="submit" disabled={!code.trim() || status === 'applied'} className="h-11 rounded-xl bg-[#1E4D3A] px-5 text-sm font-bold text-white transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-[#2C614A] disabled:cursor-not-allowed disabled:opacity-50">{status === 'applied' ? 'Applied' : 'Apply'}</button>
       </div>
-      <AnimatePresence mode="wait">{status !== 'idle' && <motion.p key={status} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role={status === 'invalid' ? 'alert' : 'status'} className={`mt-3 flex items-center gap-2 text-xs font-semibold ${status === 'applied' ? 'text-[#1E6A45]' : 'text-[#9A392F]'}`}>{status === 'applied' && <FiCheck aria-hidden="true" />}{status === 'applied' ? 'First-order coupon applied — extra 10% shown below.' : errorMessage}</motion.p>}</AnimatePresence>
+      <AnimatePresence mode="wait">{status !== 'idle' && <motion.p key={status} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role={status === 'invalid' ? 'alert' : 'status'} className={`mt-3 flex items-center gap-2 text-xs font-semibold ${status === 'applied' ? 'text-[#1E6A45]' : 'text-[#9A392F]'}`}>{status === 'applied' && <FiCheck aria-hidden="true" />}{status === 'applied' ? 'Coupon Applied Successfully — your First Order Discount is confirmed.' : errorMessage}</motion.p>}</AnimatePresence>
     </form>
   );
 }

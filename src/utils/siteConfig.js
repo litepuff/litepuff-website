@@ -12,7 +12,7 @@
   productDiscountPercent: 10,
   productDiscount: 25,
   productPrice: 224,
-  productWeight: '70 gm',
+  productWeight: '70 g',
   shippingCharge: 29,
   freeShippingQuantity: 2,
   estimatedDelivery: '3 days',

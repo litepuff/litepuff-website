@@ -134,7 +134,7 @@ export default function Checkout() {
   const [paymentFailure, setPaymentFailure] = useState(null);
   const checkoutForm = useRef(null);
 
-  const estimatedTotals = useOrderPricing(cartItems, { couponDiscount: appliedCoupon?.discount, freeShipping: appliedCoupon?.freeShipping });
+  const estimatedTotals = useOrderPricing(cartItems, { couponDiscount: appliedCoupon?.discount, freeShipping: appliedCoupon?.freeShipping, firstOrderCoupon: appliedCoupon?.firstOrder });
   const [serverPricing, setServerPricing] = useState(null);
   const totals = serverPricing || estimatedTotals;
 
@@ -156,7 +156,7 @@ export default function Checkout() {
       setAppliedCoupon(result.coupon);
       setCoupon(result.coupon.code);
       localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
-      showToast(`${result.coupon.code} applied.`);
+      showToast(result.coupon.firstOrder ? "Coupon Applied Successfully — your automatic First Order Discount is confirmed." : "Coupon Applied Successfully");
     } catch (couponError) {
       setAppliedCoupon(null);
       localStorage.removeItem('litepuffCoupon');
@@ -508,7 +508,7 @@ export default function Checkout() {
 
               <section className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-[24px] border border-[#E1D5B8] bg-[#FCF8EE] p-5 shadow-soft">
-                  <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold uppercase tracking-[0.2em] text-[#9A7A18]">Coupon</span>{totals.couponDiscount > 0 && <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 rounded-full bg-[#E5F2E9] px-2.5 py-1 text-[10px] font-bold text-[#1F5E3B]"><FiCheckCircle /> Coupon Applied</motion.span>}</div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold uppercase tracking-[0.2em] text-[#9A7A18]">Coupon</span>{appliedCoupon && <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 rounded-full bg-[#E5F2E9] px-2.5 py-1 text-[10px] font-bold text-[#1F5E3B]"><FiCheckCircle /> Coupon Applied Successfully</motion.span>}</div>
                   <div className="mt-3 flex gap-2"><input aria-label="Coupon code" value={coupon} onChange={(event) => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); setServerPricing(null); }} placeholder="Enter coupon code" className="h-12 min-w-0 flex-1 rounded-xl border border-[#DDD3BE] bg-white px-4 text-sm outline-none" /><button type="button" onClick={applyCoupon} className="h-12 rounded-xl bg-[#1F5E3B] px-5 text-sm font-bold text-white">Apply</button></div>
                   <button type="button" onClick={selectWelcomeCoupon} className="mt-3 flex w-full items-center justify-between rounded-xl border border-dashed border-[#C9A227] bg-white px-3 py-2.5 text-left transition hover:-translate-y-0.5"><span><strong className="block text-xs tracking-[0.08em] text-[#1F5E3B]">LITEPUFF10</strong><span className="text-[11px] text-[#6B726D]">10% OFF · First Order</span></span><span className="text-xs font-bold text-[#1F5E3B]">Copy & apply</span></button>
                 </div>
@@ -526,7 +526,7 @@ export default function Checkout() {
               </section>
             </div>
 
-            <aside className="sticky top-[120px] rounded-[30px] border border-[#ECE7DD] bg-white p-6 shadow-soft md:p-8">
+            <aside className="rounded-[30px] border border-[#ECE7DD] bg-white p-6 shadow-soft md:p-8 lg:sticky lg:top-[120px]">
               <div className="flex items-center gap-3">
                 <FiPackage className="text-[#1E4D3A]" />
                 <h2 className="font-display text-3xl font-semibold">
@@ -553,7 +553,8 @@ export default function Checkout() {
                 />
                 <SummaryRow label="Product Discount" value={totals.productDiscount ? `-${formatMoney(totals.productDiscount)}` : "—"} />
                 <SummaryRow label="Selling Price Total" value={formatMoney(totals.sellingSubtotal ?? (totals.subtotal - totals.productDiscount))} />
-                {totals.couponDiscount > 0 && <SummaryRow label={`${appliedCoupon?.firstOrder ? "First Order Coupon" : "Coupon"}${coupon ? ` (${coupon.toUpperCase()})` : ""}`} value={`-${formatMoney(totals.couponDiscount)}`} />}
+                {totals.firstOrderDiscount > 0 && <SummaryRow label={`First Order Discount${appliedCoupon?.firstOrder ? ` (${appliedCoupon.code})` : " (Automatic)"}`} value={`-${formatMoney(totals.firstOrderDiscount)}`} />}
+                {totals.couponDiscount > 0 && <SummaryRow label={`Coupon${coupon ? ` (${coupon.toUpperCase()})` : ""}`} value={`-${formatMoney(totals.couponDiscount)}`} />}
                 <SummaryRow
                   label="Shipping"
                   value={

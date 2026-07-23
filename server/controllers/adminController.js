@@ -86,6 +86,7 @@ const productDto = (row) => {
   flavor: row.Flavor,
   price: pricing.mrp,
   discountPrice: pricing.sellingPrice,
+  weight: pricing.weight,
   stock: Number(row.Stock || 0),
   featured: bool(row.Featured),
   bestSeller: bool(row.BestSeller),
@@ -365,6 +366,7 @@ export async function getAdminProducts(request, response) {
 
 export async function createAdminProduct(request, response) {
   const createdAt = now();
+  const pricing = productPricing();
   const row = {
     ProductID: createId("product"),
     Name: request.body.name,
@@ -377,9 +379,9 @@ export async function createAdminProduct(request, response) {
       ? request.body.ingredients.join(", ")
       : request.body.ingredients || "",
     NutritionPDF: request.body.nutritionPDF || "",
-    Price: request.body.price || 0,
-    DiscountPrice: request.body.discountPrice || "",
-    Weight: request.body.weight || "",
+    Price: pricing.mrp,
+    DiscountPrice: pricing.sellingPrice,
+    Weight: pricing.weight,
     Stock: request.body.stock ?? 0,
     Featured: Boolean(request.body.featured),
     BestSeller: Boolean(request.body.bestSeller),
@@ -394,6 +396,7 @@ export async function createAdminProduct(request, response) {
 
 export async function updateAdminProduct(request, response) {
   const row = await rowById("PRODUCTS", "ProductID", request.params.id);
+  const pricing = productPricing();
   const fields = {
     name: "Name",
     slug: "Slug",
@@ -423,6 +426,9 @@ export async function updateAdminProduct(request, response) {
     row.BestSeller = Boolean(request.body.bestSeller);
   if (request.body.name !== undefined && request.body.slug === undefined)
     row.Slug = slugify(request.body.name);
+  row.Price = pricing.mrp;
+  row.DiscountPrice = pricing.sellingPrice;
+  row.Weight = pricing.weight;
   row.UpdatedAt = now();
   await updateRow("PRODUCTS", row._row, row);
   ok(response, { product: productDto(row) }, "Product updated.");

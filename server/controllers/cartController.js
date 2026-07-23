@@ -20,6 +20,7 @@ function publicCartItem(row, product) {
       price: pricing.sellingPrice,
       regularPrice: pricing.mrp,
       oldPrice: pricing.mrp,
+      weight: pricing.weight,
       stock: Number(product.Stock || 0),
       image: product.PrimaryImage,
       status: product.Status

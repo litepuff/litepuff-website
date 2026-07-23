@@ -1,13 +1,22 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import { customerService } from '../services/customerService';
 import { useCustomerAuth } from './CustomerAuthContext';
+import { siteConfig } from '../utils/siteConfig.js';
 
 const CartContext = createContext(null);
+const normalizePrice = (item) => ({
+  ...item,
+  price: siteConfig.productPrice,
+  originalPrice: siteConfig.productMrp,
+  regularPrice: siteConfig.productMrp,
+  oldPrice: siteConfig.productMrp,
+  weight: siteConfig.productWeight,
+});
 
 export function CartProvider({ children }) {
   const { customer } = useCustomerAuth();
   const [cartItems, setCartItems] = useState(() => {
-    return JSON.parse(localStorage.getItem('everydayMakhanaCart') || '[]');
+    return JSON.parse(localStorage.getItem('everydayMakhanaCart') || '[]').map(normalizePrice);
   });
 
   function saveCart(nextItems) {
@@ -26,7 +35,7 @@ export function CartProvider({ children }) {
         item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
       );
     } else {
-      nextItems = [...cartItems, { ...product, quantity }];
+      nextItems = [...cartItems, { ...normalizePrice(product), quantity }];
     }
 
     saveCart(nextItems);

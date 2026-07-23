@@ -17,7 +17,7 @@ export default function CouponSection({ onApplied }) {
       const result = await contentService.validateCoupon({ code, subtotal: cartTotal });
       localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
       onApplied?.(result.coupon);
-      showToast(`${result.coupon.code} applied.`);
+      showToast(result.coupon.firstOrder ? 'Coupon Applied Successfully — First Order Discount confirmed.' : 'Coupon Applied Successfully');
     } catch (error) {
       localStorage.removeItem('litepuffCoupon');
       onApplied?.(null);

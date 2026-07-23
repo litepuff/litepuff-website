@@ -44,7 +44,7 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-[20px] font-semibold leading-5 tracking-[-0.02em] text-[#243029]">{item.name}</h3>
-            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#7A817C]">{item.weight || '80 g'}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#7A817C]">{item.weight || '70 g'}</p>
           </div>
           <p className="shrink-0 text-sm font-semibold text-[#243029]">{formatMoney(item.price * item.quantity)}</p>
         </div>

@@ -24,7 +24,7 @@ function publicProduct(row, images = []) {
     regularPrice: pricing.mrp,
     oldPrice: pricing.mrp,
     discountPrice: pricing.sellingPrice,
-    weight: row.Weight,
+    weight: pricing.weight,
     stock: number(row.Stock),
     featured: bool(row.Featured),
     bestSeller: bool(row.BestSeller),

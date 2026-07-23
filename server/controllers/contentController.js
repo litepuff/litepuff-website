@@ -74,10 +74,10 @@ export async function validateCoupon(request, response) {
     String(order.CouponCode || '').trim().toUpperCase() === code &&
     !['cancelled', 'failed'].includes(String(order.OrderStatus).toLowerCase())
   );
-  if (alreadyUsed) return response.status(409).json({ success: false, message: 'This coupon has already been used by your account. Your product discount is still applied.' });
   const firstOrderCoupon = ['LITEPUFF10', 'PUFFFIRST'].includes(code);
+  if (alreadyUsed) return response.status(409).json({ success: false, message: firstOrderCoupon ? "You're not eligible for the First Order Offer because it has already been used. Your Product Discount is still applied." : 'This coupon has already been used by your account. Your Product Discount is still applied.' });
   const hasCompletedOrder = orders.some((order) => order.CustomerID === request.customer.id && (String(order.PaymentStatus).toLowerCase() === 'paid' || ['completed', 'delivered'].includes(String(order.OrderStatus).toLowerCase())));
-  if (firstOrderCoupon && hasCompletedOrder) return response.status(409).json({ success: false, message: 'This first-order coupon is no longer available. Your product discount is still applied.' });
+  if (firstOrderCoupon && hasCompletedOrder) return response.status(409).json({ success: false, message: "You're not eligible for the First Order Offer because it has already been used. Your Product Discount is still applied." });
 
   let discount = 0;
   let freeShipping = false;
@@ -86,5 +86,5 @@ export async function validateCoupon(request, response) {
   if (coupon.Type === 'shipping') freeShipping = true;
   discount = Math.min(discount, Number(coupon.MaxDiscount || discount || 0));
 
-  ok(response, { coupon: { code, type: coupon.Type, discount: Number(discount.toFixed(2)), freeShipping, firstOrder: firstOrderCoupon } }, 'Coupon applied.');
+  ok(response, { coupon: { code, type: coupon.Type, discount: Number(discount.toFixed(2)), freeShipping, firstOrder: firstOrderCoupon } }, firstOrderCoupon ? 'Coupon Applied Successfully. Your automatic First Order Discount is confirmed.' : 'Coupon Applied Successfully.');
 }

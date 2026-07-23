@@ -6,9 +6,9 @@ export default function FirstOrderOffer({ compact = false }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[#9A7430] shadow-sm"><FiTag aria-hidden="true" /></span>
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9A7430]">Welcome offer</p><p className="mt-0.5 text-sm font-semibold">Get 10% off your first order with <span className="font-black">LITEPUFF10</span>.</p></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9A7430]">Welcome offer</p><p className="mt-0.5 text-sm font-semibold">Eligible customers automatically get 10% off. <span className="font-black">LITEPUFF10</span> confirms the same offer.</p></div>
         </div>
-        <span className="inline-flex items-center gap-1 text-xs font-bold text-[#1E4D3A]">Claim offer <FiArrowRight aria-hidden="true" /></span>
+        <span className="inline-flex items-center gap-1 text-xs font-bold text-[#1E4D3A]">Applied automatically <FiArrowRight aria-hidden="true" /></span>
       </div>
     </aside>
   );
