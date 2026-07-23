@@ -3,6 +3,7 @@ import AdminDataTable from '../../components/admin/AdminDataTable.jsx';
 import AdminStatusBadge from '../../components/admin/AdminStatusBadge.jsx';
 import { adminService } from '../../services/adminService';
 import { PageTitle } from './AdminProductsPage.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 const emptyBlog = { title: '', category: 'Stories', author: 'LitePuff', coverImage: '', excerpt: '', content: '', readingTime: '', tags: '', featured: false, status: 'draft' };
 
@@ -11,6 +12,7 @@ export default function AdminBlogsPage() {
   const [form, setForm] = useState(emptyBlog);
   const [editingId, setEditingId] = useState('');
   const [loading, setLoading] = useState(true);
+  const { confirmAction, showToast } = useToast();
 
   async function load(search = '') {
     setLoading(true);
@@ -31,8 +33,9 @@ export default function AdminBlogsPage() {
   }
 
   async function remove(id) {
-    if (!window.confirm('Delete this blog?')) return;
+    if (!await confirmAction({ title: 'Delete article?', message: 'This journal article will be permanently removed.', confirmLabel: 'Delete', destructive: true })) return;
     await adminService.deleteBlog(id);
+    showToast('Article deleted.');
     load();
   }
 

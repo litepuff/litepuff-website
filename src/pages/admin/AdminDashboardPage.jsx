@@ -143,14 +143,7 @@ function ChartCard({ title, rows, labelKey, valueKey }) {
                 <span>{row[labelKey]}</span>
                 <span>{row[valueKey]}</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-brand-background">
-                <div
-                  className="h-full rounded-full bg-brand-primary"
-                  style={{
-                    width: `${(Number(row[valueKey] || 0) / max) * 100}%`,
-                  }}
-                />
-              </div>
+              <meter className="analytics-meter" min="0" max={max} value={Number(row[valueKey] || 0)} aria-label={`${row[labelKey]}: ${row[valueKey]}`} />
             </div>
           ))
         ) : (

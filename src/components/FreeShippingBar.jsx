@@ -1,7 +1,7 @@
 import { FiTruck } from 'react-icons/fi';
 export default function FreeShippingBar({ quantity = 0 }) {
   const remaining = Math.max(0, 2 - quantity);
-  const progress = Math.min(100, (quantity / 2) * 100);
+  const progressClass = quantity <= 0 ? 'w-0' : quantity === 1 ? 'w-1/2' : 'w-full';
 
   return (
     <section className="rounded-[22px] border border-[#ECE7DD] bg-white p-4" aria-label="Free shipping progress">
@@ -12,7 +12,7 @@ export default function FreeShippingBar({ quantity = 0 }) {
         </p>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#ECE7DD]" aria-hidden="true">
-        <div className="h-full rounded-full bg-[#1E4D3A] transition-[width] duration-500" style={{ width: `${progress}%` }} />
+        <div className={`h-full rounded-full bg-[#1E4D3A] transition-[width] duration-500 ${progressClass}`} />
       </div>
     </section>
   );

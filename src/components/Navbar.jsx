@@ -61,11 +61,11 @@ export default function Navbar() {
 
   return (
     <header className={[
-      'fixed left-0 right-0 z-50 border-b backdrop-blur-sm transition-[top,background-color,border-color,box-shadow] duration-300 ease-out',
+      'site-navbar fixed left-0 right-0 z-50 border-b backdrop-blur-sm transition-[top,background-color,border-color,box-shadow] duration-300 ease-out',
       isSolidHeader
         ? 'border-[#ECE7DD] bg-[#FAF8F2] shadow-[0_6px_20px_rgba(0,0,0,0.05)]'
         : 'border-[#ECE7DD]/70 bg-[#FAF8F2]/90 shadow-none',
-    ].join(' ')} style={{ top: 'var(--announcement-height, 0px)' }}>
+    ].join(' ')}>
       <nav className="mx-auto flex h-[72px] max-w-7xl items-center gap-4 px-5 sm:px-6 md:h-[76px] lg:h-20 lg:px-10" aria-label="Main navigation">
         {/* ==========================
             LitePuff Logo

@@ -49,12 +49,12 @@ export default function CartItem({ item, onUpdateQuantity, onRemove }) {
           <p className="shrink-0 text-sm font-semibold text-[#243029]">{formatMoney(item.price * item.quantity)}</p>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
-          <div className="grid h-8 grid-cols-3 overflow-hidden rounded-full border border-[#E3DDD2] bg-[#FAF8F3]" aria-label={`Quantity for ${item.name}`}>
-            <button type="button" onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} className="grid h-8 w-8 place-items-center text-[#1F5E3B] transition-colors hover:bg-white" aria-label={`Decrease ${item.name} quantity`}><FiMinus size={13} /></button>
-            <span className="grid h-8 w-7 place-items-center text-xs font-semibold" aria-live="polite">{item.quantity}</span>
-            <button type="button" onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} className="grid h-8 w-8 place-items-center text-[#1F5E3B] transition-colors hover:bg-white" aria-label={`Increase ${item.name} quantity`}><FiPlus size={13} /></button>
+          <div className="grid h-11 grid-cols-3 overflow-hidden rounded-full border border-[#E3DDD2] bg-[#FAF8F3]" aria-label={`Quantity for ${item.name}`}>
+            <button type="button" onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} className="grid h-11 w-10 place-items-center text-[#1F5E3B] transition-colors hover:bg-white" aria-label={`Decrease ${item.name} quantity`}><FiMinus size={14} /></button>
+            <span className="grid h-11 w-8 place-items-center text-xs font-semibold" aria-live="polite">{item.quantity}</span>
+            <button type="button" onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} className="grid h-11 w-10 place-items-center text-[#1F5E3B] transition-colors hover:bg-white" aria-label={`Increase ${item.name} quantity`}><FiPlus size={14} /></button>
           </div>
-          <button type="button" onClick={() => onRemove(item.id)} className="text-[11px] font-semibold text-[#7A817C] transition-colors hover:text-[#9A392F]">Remove</button>
+          <button type="button" onClick={() => onRemove(item.id)} className="min-h-11 px-2 text-[11px] font-semibold text-[#7A817C] transition-colors hover:text-[#9A392F]">Remove</button>
         </div>
       </div>
     </motion.article>

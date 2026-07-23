@@ -4,6 +4,7 @@ import AdminStatusBadge from "../../components/admin/AdminStatusBadge.jsx";
 import { adminService } from "../../services/adminService";
 import { formatMoney } from "../../utils/formatMoney";
 import { PageTitle } from "./AdminProductsPage.jsx";
+import { useToast } from "../../context/ToastContext.jsx";
 
 const statuses = [
   "Pending",
@@ -21,6 +22,7 @@ const statuses = [
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { promptAction, showToast } = useToast();
 
   async function load(search = "") {
     setLoading(true);
@@ -34,9 +36,10 @@ export default function AdminOrdersPage() {
   }, []);
 
   async function updateStatus(order, status) {
-    const remarks =
-      window.prompt("Add an optional customer-visible remark:", "") || "";
+    const remarks = await promptAction({ title: "Update order status", message: "Add an optional customer-visible update.", placeholder: "Optional note for the customer", confirmLabel: "Update Status" });
+    if (remarks === null) return;
     await adminService.updateOrderStatus(order.id, { status, remarks });
+    showToast("Order status updated.");
     load();
   }
 
@@ -126,7 +129,7 @@ export default function AdminOrdersPage() {
                 adminService
                   .payment(row.id)
                   .then(({ payment }) =>
-                    window.alert(
+                    showToast(
                       `${payment.Gateway || "Razorpay"} · ${payment.Status} · ${payment.TransactionReference || payment.RazorpayPaymentID || "Pending"}`,
                     ),
                   )

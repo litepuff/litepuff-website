@@ -3,10 +3,12 @@ import AdminDataTable from '../../components/admin/AdminDataTable.jsx';
 import AdminStatusBadge from '../../components/admin/AdminStatusBadge.jsx';
 import { adminService } from '../../services/adminService';
 import { PageTitle } from './AdminProductsPage.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { confirmAction, showToast } = useToast();
 
   async function load(search = '') {
     setLoading(true);
@@ -23,8 +25,9 @@ export default function AdminReviewsPage() {
   }
 
   async function remove(id) {
-    if (!window.confirm('Delete this review?')) return;
+    if (!await confirmAction({ title: 'Delete review?', message: 'This review will be permanently removed.', confirmLabel: 'Delete', destructive: true })) return;
     await adminService.deleteReview(id);
+    showToast('Review deleted.');
     load();
   }
 

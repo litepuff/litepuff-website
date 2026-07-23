@@ -3,6 +3,7 @@ import AdminDataTable from '../../components/admin/AdminDataTable.jsx';
 import AdminStatusBadge from '../../components/admin/AdminStatusBadge.jsx';
 import { adminService } from '../../services/adminService';
 import { PageTitle } from './AdminProductsPage.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 const emptyCoupon = { code: '', type: 'percent', value: '', minOrder: 0, maxDiscount: '', expiry: '', usageLimit: '', status: 'active' };
 
@@ -11,6 +12,7 @@ export default function AdminCouponsPage() {
   const [form, setForm] = useState(emptyCoupon);
   const [editingId, setEditingId] = useState('');
   const [loading, setLoading] = useState(true);
+  const { confirmAction, showToast } = useToast();
 
   async function load(search = '') {
     setLoading(true);
@@ -31,8 +33,9 @@ export default function AdminCouponsPage() {
   }
 
   async function remove(id) {
-    if (!window.confirm('Delete this coupon?')) return;
+    if (!await confirmAction({ title: 'Delete coupon?', message: 'Customers will no longer be able to use this coupon.', confirmLabel: 'Delete', destructive: true })) return;
     await adminService.deleteCoupon(id);
+    showToast('Coupon deleted.');
     load();
   }
 

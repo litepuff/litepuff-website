@@ -600,7 +600,7 @@ export default function Checkout() {
                 type="submit"
                 disabled={loading || !cartItems.length}
                 whileHover={{ y: loading ? 0 : -2 }}
-                className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-[#1E4D3A] px-6 text-sm font-bold text-white transition hover:bg-[#2C614A] disabled:cursor-not-allowed disabled:opacity-60"
+                className="fixed bottom-[max(.75rem,env(safe-area-inset-bottom))] left-4 right-4 z-40 flex h-14 items-center justify-center rounded-full bg-[#1E4D3A] px-6 text-sm font-bold text-white shadow-[0_12px_36px_rgba(30,77,58,.28)] transition hover:bg-[#2C614A] active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-60 lg:static lg:mt-6 lg:w-full lg:shadow-none"
               >
                 {loading ? (
                   <>

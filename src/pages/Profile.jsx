@@ -19,7 +19,7 @@ import { useToast } from "../context/ToastContext.jsx";
 export default function Profile() {
   const { customer, logout, logoutAll, updateCustomer } = useCustomerAuth();
   const { addToCart } = useCart();
-  const { showToast } = useToast();
+  const { showToast, confirmAction } = useToast();
   const navigate = useNavigate();
   const [active, setActive] = useState("overview");
   const [orders, setOrders] = useState([]);
@@ -81,7 +81,8 @@ export default function Profile() {
     navigate("/login", { replace: true });
   };
   const signOutEverywhere = async () => {
-    if (!window.confirm("Sign out from every device?")) return;
+    const confirmed = await confirmAction({ title: "Logout all devices?", message: "You will need to sign in again on every device using your LitePuff account.", confirmLabel: "Logout All", destructive: true });
+    if (!confirmed) return;
     await logoutAll();
     navigate("/login", { replace: true });
   };
@@ -96,7 +97,8 @@ export default function Profile() {
     setAddresses(result.addresses);
   };
   const deleteAddress = async (id) => {
-    if (!window.confirm("Remove this saved address?")) return;
+    const confirmed = await confirmAction({ title: "Remove saved address?", message: "This delivery address will be removed from your account.", confirmLabel: "Remove", destructive: true });
+    if (!confirmed) return;
     await customerService.removeAddress(id);
     setAddresses((items) => items.filter((item) => item.id !== id));
   };

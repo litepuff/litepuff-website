@@ -3,10 +3,12 @@ import AdminDataTable from '../../components/admin/AdminDataTable.jsx';
 import AdminStatusBadge from '../../components/admin/AdminStatusBadge.jsx';
 import { adminService } from '../../services/adminService';
 import { PageTitle } from './AdminProductsPage.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export default function AdminContactMessagesPage() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { confirmAction, showToast } = useToast();
 
   async function load(search = '') {
     setLoading(true);
@@ -18,8 +20,9 @@ export default function AdminContactMessagesPage() {
   useEffect(() => { load(); }, []);
 
   async function remove(id) {
-    if (!window.confirm('Delete this message?')) return;
+    if (!await confirmAction({ title: 'Delete message?', message: 'This customer message will be permanently removed.', confirmLabel: 'Delete', destructive: true })) return;
     await adminService.deleteMessage(id);
+    showToast('Message deleted.');
     load();
   }
 

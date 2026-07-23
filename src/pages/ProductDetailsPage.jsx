@@ -51,7 +51,7 @@ function ProductShowcase({ product }) {
 
   return (
     <div className="mx-auto w-full max-w-[480px] md:sticky md:top-24">
-      <div className="group flex h-[420px] items-center justify-center overflow-hidden rounded-[32px] border border-[#ECE7DD] bg-white shadow-[0_16px_50px_rgba(36,48,41,0.055)] sm:h-[500px] lg:h-[560px]">
+      <div className="group flex h-[360px] items-center justify-center overflow-hidden rounded-[24px] border border-[#ECE7DD] bg-white shadow-[0_16px_50px_rgba(36,48,41,0.055)] sm:h-[500px] sm:rounded-[32px] lg:h-[560px]">
         <motion.img
           key={product.flavour}
           src={image}
@@ -59,7 +59,7 @@ function ProductShowcase({ product }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
-          className="h-[300px] w-[300px] object-contain transition-transform duration-[400ms] group-hover:scale-[1.03] sm:h-[340px] sm:w-[340px] lg:h-[360px] lg:w-[360px]"
+          className="h-[260px] w-[260px] max-w-[82%] object-contain transition-transform duration-[400ms] group-hover:scale-[1.03] sm:h-[340px] sm:w-[340px] lg:h-[360px] lg:w-[360px]"
         />
       </div>
 
@@ -80,8 +80,7 @@ function ProductShowcase({ product }) {
 function QuantitySelector({ quantity, setQuantity }) {
   return (
     <div
-      className="overflow-hidden rounded-full border border-[#ECE7DD] bg-white"
-      style={{ display: 'grid', width: 144, height: 48, gridTemplateColumns: '48px 48px 48px' }}
+      className="grid h-12 w-36 grid-cols-3 overflow-hidden rounded-full border border-[#ECE7DD] bg-white"
       aria-label="Quantity selector"
     >
       <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="flex h-12 w-12 items-center justify-center text-xl font-light leading-none text-[#1E4D3A] transition-colors duration-300 hover:bg-[#FAF8F2]" aria-label="Decrease quantity"><span aria-hidden="true" className="block -translate-y-px">&minus;</span></button>
@@ -93,10 +92,10 @@ function QuantitySelector({ quantity, setQuantity }) {
 
 // Compact primary product actions.
 function ProductActions({ product, quantity, wishlisted, onToggleWishlist, addToCart }) {
-  const buttonBase = 'flex h-12 w-[220px] items-center justify-center rounded-full px-6 text-sm font-semibold transition-all duration-[400ms]';
+  const buttonBase = 'flex h-12 w-full items-center justify-center rounded-full px-4 text-sm font-semibold transition-all duration-200 sm:w-[220px] sm:px-6';
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="sticky bottom-0 z-20 -mx-4 grid grid-cols-[1fr_1fr_auto] items-center gap-2 border-t border-[#ECE7DD] bg-[#FAF8F2]/95 px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0">
       <motion.button
         type="button"
         onClick={() => addToCart(product, quantity)}
@@ -189,7 +188,7 @@ function NutritionTable({ label }) {
       </div>
 
       <div className="mt-5 overflow-x-auto rounded-2xl border border-[#ECE7DD]">
-        <table className="w-full border-collapse text-left text-sm" style={{ minWidth: 560 }}>
+        <table className="min-w-[560px] w-full border-collapse text-left text-sm">
           <thead>
             <tr className="h-12 border-b border-[#ECE7DD] bg-[#FAF8F2] text-xs uppercase tracking-[0.08em] text-[#4E5550]">
               <th className="px-4 font-bold">Nutrient</th>
@@ -341,7 +340,7 @@ export default function ProductDetailsPage() {
 
           <div className="min-w-0 py-1 lg:py-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-[#C89B3C]">{product.category} Collection</p>
-            <h1 className="mt-2 font-display text-[40px] font-semibold leading-[0.98] tracking-[-0.04em] lg:text-[52px]">{product.name}</h1>
+            <h1 className="mt-2 font-display text-[36px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[40px] lg:text-[52px]">{product.name}</h1>
 
             <div className="mt-3 flex items-center gap-3 text-xs">
               <span className="tracking-[0.14em] text-[#C89B3C]" aria-label={`${reviewSummary.averageRating || 0} out of 5 stars`}>{'★★★★★'}</span>

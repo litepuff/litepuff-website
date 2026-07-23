@@ -56,7 +56,7 @@ function Insight({ title, rows, labelKey, valueKey }) {
         {rows.length ? rows.map((row) => (
           <div key={`${title}-${row[labelKey]}`}>
             <div className="flex justify-between text-sm font-bold"><span>{row[labelKey]}</span><span>{row[valueKey]}</span></div>
-            <div className="mt-2 h-2 rounded-full bg-brand-background"><div className="h-2 rounded-full bg-brand-accent" style={{ width: `${(Number(row[valueKey] || 0) / max) * 100}%` }} /></div>
+            <meter className="analytics-meter mt-2 block" min="0" max={max} value={Number(row[valueKey] || 0)} aria-label={`${row[labelKey]}: ${row[valueKey]}`} />
           </div>
         )) : <p className="text-sm text-brand-muted">No analytics available yet.</p>}
       </div>

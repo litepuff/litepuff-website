@@ -3,6 +3,7 @@ import AdminDataTable from '../../components/admin/AdminDataTable.jsx';
 import AdminStatusBadge from '../../components/admin/AdminStatusBadge.jsx';
 import { adminService } from '../../services/adminService';
 import { formatMoney } from '../../utils/formatMoney';
+import { useToast } from '../../context/ToastContext.jsx';
 
 const emptyProduct = { name: '', category: 'Makhana', flavor: '', price: '', discountPrice: '', stock: 0, status: 'active', featured: false, bestSeller: false, primaryImage: '', nutritionPDF: '', shortDescription: '' };
 
@@ -11,6 +12,7 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState(emptyProduct);
   const [editingId, setEditingId] = useState('');
   const [loading, setLoading] = useState(true);
+  const { confirmAction, showToast } = useToast();
 
   async function load(search = '') {
     setLoading(true);
@@ -31,8 +33,9 @@ export default function AdminProductsPage() {
   }
 
   async function remove(id) {
-    if (!window.confirm('Delete this product?')) return;
+    if (!await confirmAction({ title: 'Delete product?', message: 'This product will be removed from the catalogue.', confirmLabel: 'Delete', destructive: true })) return;
     await adminService.deleteProduct(id);
+    showToast('Product deleted.');
     load();
   }
 
