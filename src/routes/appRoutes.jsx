@@ -62,7 +62,7 @@ export const appRoutes = [
       { path: 'blog', element: <Journal /> },
       { path: 'blog/:slug', element: <BlogDetails /> },
       { path: 'cart', element: <Cart /> },
-      { path: 'checkout', element: <Checkout /> },
+      { path: 'checkout', element: <CustomerProtectedRoute><Checkout /></CustomerProtectedRoute> },
       { path: 'order-success/:orderId', element: <CustomerProtectedRoute><OrderSuccess /></CustomerProtectedRoute> },
       { path: 'orders/:orderId', element: <CustomerProtectedRoute><OrderTracking /></CustomerProtectedRoute> },
       { path: 'login', element: <LoginPage /> },

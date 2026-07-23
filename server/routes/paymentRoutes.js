@@ -9,7 +9,7 @@ import {
   verifyPayment,
   verifyPaymentValidators,
 } from "../controllers/paymentController.js";
-import { optionalCheckoutCustomer, paymentOwner, protectCustomerRoute, requireOwnership, requirePermission } from "../middleware/authMiddleware.js";
+import { protectCustomerRoute, requireOwnership, requirePermission } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validationMiddleware.js";
 import { PERMISSIONS } from "../config/auth.js";
 
@@ -19,28 +19,30 @@ const handle = (controller) => (request, response, next) =>
 
 router.post(
   "/create-order",
-  optionalCheckoutCustomer,
+  protectCustomerRoute,
   createPaymentValidators,
   validate,
   handle(createPaymentOrder),
 );
 router.post(
   "/cash-on-delivery",
-  optionalCheckoutCustomer,
+  protectCustomerRoute,
   createPaymentValidators,
   validate,
   handle(createCashOnDeliveryOrder),
 );
 router.post(
   "/verify",
-  paymentOwner,
+  protectCustomerRoute,
+  requirePermission(PERMISSIONS.CUSTOMER_ORDERS_READ),
   verifyPaymentValidators,
   validate,
   handle(verifyPayment),
 );
 router.post(
   "/failure",
-  paymentOwner,
+  protectCustomerRoute,
+  requirePermission(PERMISSIONS.CUSTOMER_ORDERS_READ),
   failurePaymentValidators,
   validate,
   handle(recordPaymentFailure),

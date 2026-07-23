@@ -41,6 +41,8 @@ export const customerService = {
   me: () => customerApi.get('/auth/me').then(payload),
   session: () => customerApi.get('/auth/session').then(payload),
   logout: () => customerApi.post('/auth/logout').then(payload),
+  logoutAll: () => customerApi.post('/auth/logout-all').then(payload),
+  sessions: () => customerApi.get('/account/sessions').then(payload),
   recover: (data) => customerApi.post('/account/recover', data).then(payload),
   profile: () => customerApi.get('/account/profile').then(payload).then((result) => ({ ...result, customer: result.profile })),
   updateProfile: (data) => customerApi.put('/account/profile', { firstName: data.firstName, lastName: data.lastName, marketingConsent: data.marketingConsent ?? data.newsletter }).then(payload).then((result) => ({ ...result, customer: result.profile })),

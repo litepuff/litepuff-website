@@ -332,7 +332,7 @@ export default function Checkout() {
         description="Complete your LitePuff order securely."
         path="/checkout"
       />
-      <main className="bg-[#FAF8F2] pb-28 pt-10 text-[#243029] lg:py-20">
+      <main className="overflow-x-clip bg-[#FAF8F2] pb-28 pt-6 text-[#243029] sm:pt-10 lg:py-20">
         <div className="container-page max-w-7xl">
           <nav
             className="flex items-center gap-2 text-xs text-[#7A817C]"
@@ -414,7 +414,7 @@ export default function Checkout() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
-                className="rounded-[30px] border border-[#ECE7DD] bg-white p-6 shadow-soft md:p-8"
+                className="min-w-0 rounded-[24px] border border-[#ECE7DD] bg-white p-4 shadow-soft sm:p-6 md:rounded-[30px] md:p-8"
               >
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 place-items-center rounded-full bg-[#EEF3EF] text-[#1E4D3A]">
@@ -488,7 +488,7 @@ export default function Checkout() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: 0.05 }}
-                className="rounded-[30px] border border-[#ECE7DD] bg-white p-6 shadow-soft md:p-8"
+                className="min-w-0 rounded-[24px] border border-[#ECE7DD] bg-white p-4 shadow-soft sm:p-6 md:rounded-[30px] md:p-8"
               >
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 place-items-center rounded-full bg-[#F8F1DF] text-[#9A7430]">
@@ -557,7 +557,7 @@ export default function Checkout() {
               </section>
             </div>
 
-            <aside className="rounded-[30px] border border-[#ECE7DD] bg-white p-6 shadow-soft md:p-8 lg:sticky lg:top-[120px]">
+            <aside className="min-w-0 rounded-[24px] border border-[#ECE7DD] bg-white p-4 shadow-soft sm:p-6 md:rounded-[30px] md:p-8 lg:sticky lg:top-[120px]">
               <div className="flex items-center gap-3">
                 <FiPackage className="text-[#1E4D3A]" />
                 <h2 className="font-display text-3xl font-semibold">
@@ -633,7 +633,7 @@ export default function Checkout() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.3 }}
-              className="w-full max-w-xl rounded-[34px] bg-white p-8 text-center shadow-2xl"
+              className="max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto rounded-[24px] bg-white p-5 text-center shadow-2xl sm:rounded-[34px] sm:p-8"
             >
               <FiCheckCircle className="mx-auto text-[#1E4D3A]" size={58} />
               <h2 className="mt-4 font-display text-4xl font-semibold">

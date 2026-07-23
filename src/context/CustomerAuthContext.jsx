@@ -23,8 +23,9 @@ export function CustomerAuthProvider({ children }) {
     return result.customer;
   }
   async function logout() { try { await customerService.logout(); } finally { setCustomer(null); } }
+  async function logoutAll() { try { await customerService.logoutAll(); } finally { setCustomer(null); } }
   function updateCustomer(next) { setCustomer(next); }
-  const value = useMemo(() => ({ customer, loading, completeAuthentication, logout, updateCustomer }), [customer, loading]);
+  const value = useMemo(() => ({ customer, loading, completeAuthentication, logout, logoutAll, updateCustomer }), [customer, loading]);
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>;
 }
 

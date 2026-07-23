@@ -12,7 +12,7 @@ export default function MainLayout() {
   const { pathname } = useLocation();
 
   return (
-    <div className="min-h-screen bg-[#FAF8F2]">
+    <div className="min-h-screen max-w-full overflow-x-clip bg-[#FAF8F2]">
       <ScrollToTop />
       <WelcomeOffer />
       <Navbar />

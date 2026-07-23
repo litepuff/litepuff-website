@@ -1,8 +1,5 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import { getRows } from '../services/googleSheets.js';
-import { appendRow } from '../services/googleSheets.js';
-import { createId } from '../utils/createId.js';
 import { jwtService } from '../services/auth/JwtService.js';
 import { sessionService } from '../services/auth/SessionService.js';
 import { customerBusinessService } from '../services/business/CustomerService.js';
@@ -25,38 +22,6 @@ export function protectAdminRoute(request, response, next) {
     if (request.admin.role !== 'admin') throw new AppError('Admin role is invalid.', { status: 403, code: 'INVALID_ROLE_ACCESS' });
     next();
   } catch (error) { logger.warn('auth.admin.unauthorized', { requestId: request.id, code: error.code || 'INVALID_ADMIN_TOKEN' }); next(error instanceof AppError ? error : new AppError('Invalid or expired admin token.', { status: 401, code: 'INVALID_ADMIN_TOKEN' })); }
-}
-
-export async function optionalCheckoutCustomer(request, response, next) {
-  const header = request.headers.authorization || '';
-  if (header.startsWith('Bearer ')) return protectCustomerRoute(request, response, next);
-  try {
-    const address = request.body?.address || {};
-    const email = String(request.body?.email || address.email || '').trim().toLowerCase();
-    const phone = String(address.phone || '').replace(/\D/g, '').slice(-10);
-    if (!phone || !/^[6-9]\d{9}$/.test(phone)) return response.status(422).json({ success: false, message: 'A valid contact number is required for guest checkout.', errors: [] });
-    const rows = await getRows('CUSTOMERS');
-    let row = rows.find((item) => (email && String(item.Email).toLowerCase() === email) || String(item.Phone).replace(/\D/g, '').slice(-10) === phone);
-    if (!row) {
-      const names = String(address.fullName || '').trim().split(/\s+/);
-      row = { CustomerID: createId('guest'), FirstName: names[0] || 'Guest', LastName: names.slice(1).join(' '), Email: email, Phone: `+91${phone}`, Provider: 'Guest', ProfileImage: '', MarketingConsent: 'false', Role: 'customer', CreatedAt: new Date().toISOString(), UpdatedAt: new Date().toISOString(), LastLogin: '', Status: 'active' };
-      await appendRow('CUSTOMERS', row);
-    }
-    request.customer = { id: row.CustomerID, email: row.Email, role: 'guest' };
-    next();
-  } catch (error) { next(error); }
-}
-
-export async function paymentOwner(request, response, next) {
-  const header = request.headers.authorization || '';
-  if (header.startsWith('Bearer ')) return protectCustomerRoute(request, response, next);
-  try {
-    const paymentId = request.body?.paymentId || request.params?.paymentId;
-    const payment = (await getRows('PAYMENTS')).find((row) => row.PaymentID === paymentId);
-    if (!payment || !request.body?.checkoutToken) return response.status(401).json({ success: false, message: 'Payment authorization is required.', errors: [] });
-    request.customer = { id: payment.CustomerID, role: 'guest' };
-    next();
-  } catch (error) { next(error); }
 }
 
 export function createAuthorizationMiddleware({ authorization = authorizationService, audit = auditLogService, ownership = resourceOwnershipService } = {}) {

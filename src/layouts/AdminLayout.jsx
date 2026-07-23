@@ -30,7 +30,7 @@ export default function AdminLayout() {
   }
 
   const sidebar = (
-    <aside className="flex h-full w-[280px] flex-col border-r border-brand-border bg-white px-5 py-6">
+    <aside className="flex h-full w-[min(280px,88vw)] flex-col overflow-y-auto border-r border-brand-border bg-white px-5 py-6">
       <div>
         <p className="text-xs font-black uppercase tracking-[0.28em] text-brand-accent">LitePuff</p>
         <h1 className="mt-2 font-display text-3xl font-black text-brand-text">Admin</h1>
@@ -50,11 +50,11 @@ export default function AdminLayout() {
     <div className="min-h-screen bg-brand-background text-brand-text">
       <div className="fixed inset-y-0 left-0 z-30 hidden lg:block">{sidebar}</div>
 
-      <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-brand-border bg-brand-background/95 px-4 backdrop-blur lg:ml-[280px] lg:px-8">
+      <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-brand-border bg-brand-background/95 px-4 py-3 backdrop-blur lg:ml-[280px] lg:px-8">
         <button onClick={() => setOpen(true)} className="rounded-2xl border border-brand-border bg-white px-4 py-2 text-sm font-bold lg:hidden">Menu</button>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-accent">Business Management</p>
-          <h2 className="font-display text-2xl font-black">LitePuff Control Room</h2>
+          <h2 className="truncate font-display text-lg font-black sm:text-2xl">LitePuff Control Room</h2>
         </div>
         <div className="hidden text-right sm:block">
           <p className="text-sm font-bold">{admin?.name || 'Admin'}</p>
@@ -62,7 +62,7 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      <main className="px-4 py-6 lg:ml-[280px] lg:px-8">
+      <main className="min-w-0 overflow-x-hidden px-4 py-6 lg:ml-[280px] lg:px-8">
         <Outlet />
       </main>
 

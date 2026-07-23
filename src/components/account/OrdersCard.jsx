@@ -21,14 +21,14 @@ export default function OrdersCard({ orders = [], onDownloadInvoice }) {
   return (
     <section
       id="orders"
-      className="rounded-[28px] border border-[#E9E4DA] bg-white p-6 shadow-soft sm:p-7"
+      className="min-w-0 rounded-[24px] border border-[#E9E4DA] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-7"
     >
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold tracking-[.2em] text-[#9A7430]">
             YOUR PURCHASES
           </p>
-          <h2 className="mt-1 text-3xl font-semibold">Recent Orders</h2>
+          <h2 className="mt-1 text-2xl font-semibold sm:text-3xl">Recent Orders</h2>
         </div>
         <FiPackage className="text-[#1E4D3A]" size={22} />
       </div>

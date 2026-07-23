@@ -17,7 +17,7 @@ import { useCart } from "../context/CartContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
 
 export default function Profile() {
-  const { customer, logout, updateCustomer } = useCustomerAuth();
+  const { customer, logout, logoutAll, updateCustomer } = useCustomerAuth();
   const { addToCart } = useCart();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -80,6 +80,11 @@ export default function Profile() {
     await logout();
     navigate("/login", { replace: true });
   };
+  const signOutEverywhere = async () => {
+    if (!window.confirm("Sign out from every device?")) return;
+    await logoutAll();
+    navigate("/login", { replace: true });
+  };
   const saveProfile = async (data) => {
     const result = await customerService.updateProfile(data);
     updateCustomer(result.customer);
@@ -110,8 +115,8 @@ export default function Profile() {
         description="Manage your LitePuff account, orders and preferences."
         path="/profile"
       />
-      <main className="min-h-screen bg-[#FAF8F2] pb-28 pt-10">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+      <main className="min-h-screen overflow-x-clip bg-[#FAF8F2] pb-28 pt-6 sm:pt-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ProfileHeader
             customer={customer}
             onEdit={() => {
@@ -124,7 +129,7 @@ export default function Profile() {
               {error}
             </div>
           )}
-          <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
             <ProfileSidebar
               active={active}
               onSelect={select}
@@ -134,10 +139,10 @@ export default function Profile() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
-              className="grid gap-6"
+              className="grid min-w-0 gap-4 sm:gap-6"
             >
               <OrdersCard orders={orders} onDownloadInvoice={downloadInvoice} />
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid min-w-0 gap-4 sm:gap-6 xl:grid-cols-2">
                 <AddressesCard
                   addresses={addresses}
                   onSave={saveAddress}
@@ -154,6 +159,7 @@ export default function Profile() {
                 editing={editing}
                 onEditing={setEditing}
                 onSave={saveProfile}
+                onLogoutAll={signOutEverywhere}
               />
               <NewsletterCard
                 subscribed={customer.marketingConsent}
@@ -170,7 +176,7 @@ export default function Profile() {
         </div>
         <button
           onClick={signOut}
-          className="fixed bottom-4 left-5 right-5 z-30 flex h-12 items-center justify-center gap-2 rounded-full bg-[#243029] font-semibold text-white shadow-xl lg:hidden"
+          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-30 flex h-12 items-center justify-center gap-2 rounded-full bg-[#243029] font-semibold text-white shadow-xl lg:hidden"
         >
           <FiLogOut /> Logout
         </button>

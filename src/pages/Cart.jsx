@@ -16,7 +16,7 @@ export default function Cart() {
   return (
     <>
       <Seo title="Cart" description="Review your LitePuff cart and checkout." path="/cart" />
-      <main className="bg-[#FAF8F2] pb-[100px] pt-8 text-[#243029] md:pt-12 lg:pt-20">
+      <main className="overflow-x-clip bg-[#FAF8F2] pb-[100px] pt-6 text-[#243029] sm:pt-8 md:pt-12 lg:pt-20">
         <div className="container-page max-w-7xl">
           <nav className="flex items-center gap-2 text-xs text-[#7A817C]" aria-label="Breadcrumb">
             <Link to="/" className="transition-colors hover:text-[#1E4D3A]">Home</Link><span aria-hidden="true">/</span><span aria-current="page" className="text-[#243029]">Cart</span>
