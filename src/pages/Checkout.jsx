@@ -159,6 +159,7 @@ export default function Checkout() {
       showToast(`${result.coupon.code} applied.`);
     } catch (couponError) {
       setAppliedCoupon(null);
+      localStorage.removeItem('litepuffCoupon');
       showToast(apiMessage(couponError, 'Coupon is not valid.'), 'error');
     }
   }
@@ -551,8 +552,8 @@ export default function Checkout() {
                   value={formatMoney(totals.subtotal)}
                 />
                 <SummaryRow label="Product Discount" value={totals.productDiscount ? `-${formatMoney(totals.productDiscount)}` : "—"} />
-                {totals.firstOrderDiscount > 0 && <SummaryRow label="First Order Discount (10%)" value={`-${formatMoney(totals.firstOrderDiscount)}`} />}
-                {totals.couponDiscount > 0 && <SummaryRow label={`Coupon${coupon ? ` (${coupon.toUpperCase()})` : ""}`} value={`-${formatMoney(totals.couponDiscount)}`} />}
+                <SummaryRow label="Selling Price Total" value={formatMoney(totals.sellingSubtotal ?? (totals.subtotal - totals.productDiscount))} />
+                {totals.couponDiscount > 0 && <SummaryRow label={`${appliedCoupon?.firstOrder ? "First Order Coupon" : "Coupon"}${coupon ? ` (${coupon.toUpperCase()})` : ""}`} value={`-${formatMoney(totals.couponDiscount)}`} />}
                 <SummaryRow
                   label="Shipping"
                   value={

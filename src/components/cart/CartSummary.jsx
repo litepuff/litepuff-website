@@ -21,14 +21,14 @@ export default function CartSummary({ items = [], coupon = null, onCouponApplied
       <div className="mt-5 space-y-2.5">
         <Row label="Subtotal"><strong className="text-[#243029]">{formatMoney(pricing.subtotal)}</strong></Row>
         {pricing.productDiscount > 0 && <Row label="Product Discount"><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.productDiscount)}</span></Row>}
-        {pricing.firstOrderDiscount > 0 && <Row label="First Order Discount (10%)"><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.firstOrderDiscount)}</span></Row>}
-        {pricing.couponDiscount > 0 && <Row label={`Coupon${coupon?.code ? ` (${coupon.code})` : ''}`}><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.couponDiscount)}</span></Row>}
+        <Row label="Selling Price Total"><strong className="text-[#243029]">{formatMoney(pricing.sellingSubtotal)}</strong></Row>
+        {pricing.couponDiscount > 0 && <Row label={`${coupon?.firstOrder ? 'First Order Coupon' : 'Coupon'}${coupon?.code ? ` (${coupon.code})` : ''}`}><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.couponDiscount)}</span></Row>}
         <Row label="Shipping"><span className="font-semibold text-[#1E4D3A]">{pricing.shipping === 0 ? 'FREE' : formatMoney(pricing.shipping)}</span></Row>
         <Row label="Tax">Included</Row>
       </div>
       <div className="mt-4 border-t border-[#ECE7DD] pt-4">
         <div className="flex items-end justify-between gap-4"><span className="font-semibold text-[#243029]">Grand Total</span><strong className="font-display text-[30px] font-semibold leading-none text-[#243029]">{formatMoney(pricing.grandTotal)}</strong></div>
-        {pricing.firstOrderEligible && <p className="mt-2 text-right text-[11px] font-semibold text-[#1E4D3A]">First-order saving applied automatically</p>}
+        {pricing.firstOrderEligible && !pricing.couponDiscount && <p className="mt-2 text-right text-[11px] font-semibold text-[#1E4D3A]">First-order coupon available</p>}
       </div>
       <div className="mt-5"><ShippingProgress quantity={pricing.quantity} /></div>
       <div className="mt-4"><CouponSection onApplied={onCouponApplied} /></div>

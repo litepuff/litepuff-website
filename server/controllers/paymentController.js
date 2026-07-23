@@ -199,7 +199,7 @@ async function createPaymentOrderUnlocked(request, response) {
       checkoutToken,
       firstOrderReserved: snapshot.firstOrderEligible,
       checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-      pricing: { subtotal: snapshot.subtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal },
+      pricing: { subtotal: snapshot.subtotal, sellingSubtotal: snapshot.sellingSubtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal },
       message: "Payment checkout created.",
     }),
   });
@@ -214,7 +214,7 @@ async function createPaymentOrderUnlocked(request, response) {
       keyId: gateway.keyId,
       mode: gateway.mode,
       checkoutToken,
-      pricing: { subtotal: snapshot.subtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, discount: snapshot.discount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal, firstOrderEligible: snapshot.firstOrderEligible },
+      pricing: { subtotal: snapshot.subtotal, sellingSubtotal: snapshot.sellingSubtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, discount: snapshot.discount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal, firstOrderEligible: snapshot.firstOrderEligible },
     },
     "Secure payment prepared.",
   );
@@ -246,7 +246,7 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
     PaidAt: "",
     TransactionReference: paymentId,
     Gateway: "Cash on Delivery",
-    Remarks: encodeRemarks({ firstOrderReserved: snapshot.firstOrderEligible, checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(), pricing: { subtotal: snapshot.subtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal }, message: "Creating Cash on Delivery order." }),
+    Remarks: encodeRemarks({ firstOrderReserved: snapshot.firstOrderEligible, checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(), pricing: { subtotal: snapshot.subtotal, sellingSubtotal: snapshot.sellingSubtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal }, message: "Creating Cash on Delivery order." }),
   });
   const payment = await findRow(
     "PAYMENTS",

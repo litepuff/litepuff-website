@@ -1,11 +1,13 @@
 import { productService } from '../services/business/ProductService.js';
 import { ok } from '../utils/apiResponse.js';
 import { fail } from '../utils/apiResponse.js';
+import { productPricing } from '../utils/productPricing.js';
 
 const bool = (value) => String(value).toLowerCase() === 'true' || value === true;
 const number = (value) => Number(value || 0);
 
 function publicProduct(row, images = []) {
+  const pricing = productPricing();
   return {
     id: row.ProductID,
     productId: row.ProductID,
@@ -18,10 +20,10 @@ function publicProduct(row, images = []) {
     description: row.Description,
     ingredients: String(row.Ingredients || '').split(',').map((item) => item.trim()).filter(Boolean),
     nutritionPDF: row.NutritionPDF,
-    price: number(row.DiscountPrice || row.Price),
-    regularPrice: number(row.Price),
-    oldPrice: number(row.Price),
-    discountPrice: number(row.DiscountPrice),
+    price: pricing.sellingPrice,
+    regularPrice: pricing.mrp,
+    oldPrice: pricing.mrp,
+    discountPrice: pricing.sellingPrice,
     weight: row.Weight,
     stock: number(row.Stock),
     featured: bool(row.Featured),

@@ -14,6 +14,7 @@ import { customerBusinessService } from "../services/business/CustomerService.js
 import { notificationService } from "../services/NotificationService.js";
 import { AppError } from "../utils/AppError.js";
 import { logger } from "../utils/logger.js";
+import { productPricing } from "../utils/productPricing.js";
 
 const now = () => new Date().toISOString();
 const money = (value) => Number(Number(value || 0).toFixed(2));
@@ -74,15 +75,17 @@ const rowById = async (sheet, column, id) => {
   return row;
 };
 
-const productDto = (row) => ({
+const productDto = (row) => {
+  const pricing = productPricing();
+  return ({
   id: row.ProductID,
   productId: row.ProductID,
   name: row.Name,
   slug: row.Slug,
   category: row.Category,
   flavor: row.Flavor,
-  price: Number(row.Price || 0),
-  discountPrice: Number(row.DiscountPrice || 0),
+  price: pricing.mrp,
+  discountPrice: pricing.sellingPrice,
   stock: Number(row.Stock || 0),
   featured: bool(row.Featured),
   bestSeller: bool(row.BestSeller),
@@ -91,7 +94,8 @@ const productDto = (row) => ({
   nutritionPDF: row.NutritionPDF,
   createdAt: row.CreatedAt,
   updatedAt: row.UpdatedAt,
-});
+  });
+};
 
 const orderDto = (row, customer = null, items = [], payment = null) => ({
   id: row.OrderID,

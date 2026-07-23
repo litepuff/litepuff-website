@@ -19,6 +19,8 @@ export default function CouponSection({ onApplied }) {
       onApplied?.(result.coupon);
       showToast(`${result.coupon.code} applied.`);
     } catch (error) {
+      localStorage.removeItem('litepuffCoupon');
+      onApplied?.(null);
       showToast(error.response?.data?.message || 'Coupon is not valid.', 'error');
     } finally {
       setLoading(false);

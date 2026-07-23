@@ -63,11 +63,21 @@ export async function validateCoupon(request, response) {
   const code = String(request.body.code || '').trim().toUpperCase();
   const subtotal = Number(request.body.subtotal || 0);
   if (!code) return response.status(400).json({ success: false, message: 'Coupon code is required.' });
-  const coupon = (await getRows('COUPONS')).find((item) => String(item.Code).trim().toUpperCase() === code);
+  const [coupons, orders] = await Promise.all([getRows('COUPONS'), getRows('ORDERS')]);
+  const coupon = coupons.find((item) => String(item.Code).trim().toUpperCase() === code);
   if (!coupon || String(coupon.Status).toLowerCase() !== 'active') return response.status(404).json({ success: false, message: 'Coupon is not valid.' });
   if (coupon.Expiry && new Date(coupon.Expiry) < new Date()) return response.status(410).json({ success: false, message: 'Coupon has expired.' });
   if (Number(coupon.MinOrder || 0) > subtotal) return response.status(400).json({ success: false, message: `Minimum order value is ₹${coupon.MinOrder}.` });
   if (Number(coupon.UsageLimit || 0) && Number(coupon.UsedCount || 0) >= Number(coupon.UsageLimit)) return response.status(409).json({ success: false, message: 'Coupon usage limit reached.' });
+  const alreadyUsed = orders.some((order) =>
+    order.CustomerID === request.customer.id &&
+    String(order.CouponCode || '').trim().toUpperCase() === code &&
+    !['cancelled', 'failed'].includes(String(order.OrderStatus).toLowerCase())
+  );
+  if (alreadyUsed) return response.status(409).json({ success: false, message: 'This coupon has already been used by your account. Your product discount is still applied.' });
+  const firstOrderCoupon = ['LITEPUFF10', 'PUFFFIRST'].includes(code);
+  const hasCompletedOrder = orders.some((order) => order.CustomerID === request.customer.id && (String(order.PaymentStatus).toLowerCase() === 'paid' || ['completed', 'delivered'].includes(String(order.OrderStatus).toLowerCase())));
+  if (firstOrderCoupon && hasCompletedOrder) return response.status(409).json({ success: false, message: 'This first-order coupon is no longer available. Your product discount is still applied.' });
 
   let discount = 0;
   let freeShipping = false;
@@ -76,5 +86,5 @@ export async function validateCoupon(request, response) {
   if (coupon.Type === 'shipping') freeShipping = true;
   discount = Math.min(discount, Number(coupon.MaxDiscount || discount || 0));
 
-  ok(response, { coupon: { code, type: coupon.Type, discount: Number(discount.toFixed(2)), freeShipping } }, 'Coupon applied.');
+  ok(response, { coupon: { code, type: coupon.Type, discount: Number(discount.toFixed(2)), freeShipping, firstOrder: firstOrderCoupon } }, 'Coupon applied.');
 }

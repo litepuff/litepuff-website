@@ -15,31 +15,31 @@ const products = [
   {
     id: 'peri-peri-makhana', slug: 'peri-peri-makhana', name: 'Peri Peri Makhana',
     description: 'Smoky chilli and tangy spice with a bold, lingering finish.',
-    price: 249, weight: '70gm', rating: '4.8', reviews: 128, badge: 'Best Seller',
+    price: 224, weight: '70gm', rating: '4.8', reviews: 128, badge: 'Best Seller',
     tags: ['Spicy', 'Tangy'], image: periPeriImage,
   },
   {
     id: 'mint-pudina-makhana', slug: 'mint-pudina-makhana', name: 'Mint Pudina Makhana',
     description: 'Fresh pudina seasoning with a clean, cooling crunch.',
-    price: 249, weight: '70gm', rating: '4.7', reviews: 116, badge: 'Healthy Choice',
+    price: 224, weight: '70gm', rating: '4.7', reviews: 116, badge: 'Healthy Choice',
     tags: ['Minty', 'Zesty'], image: mintImage,
   },
   {
     id: 'cheese-makhana', slug: 'cheese-makhana', name: 'Cheese Makhana',
     description: 'Rich, savoury cheese flavour with a satisfyingly light bite.',
-    price: 249, weight: '70gm', rating: '4.9', reviews: 142, badge: 'Top Rated',
+    price: 224, weight: '70gm', rating: '4.9', reviews: 142, badge: 'Top Rated',
     tags: ['Cheesy', 'Creamy'], image: cheeseImage,
   },
   {
     id: 'cream-onion-makhana', slug: 'cream-onion-makhana', name: 'Cream & Onion Makhana',
     description: 'Smooth cream and savoury onion, balanced in every handful.',
-    price: 249, weight: '70gm', rating: '4.8', reviews: 124, badge: 'Most Loved',
+    price: 224, weight: '70gm', rating: '4.8', reviews: 124, badge: 'Most Loved',
     tags: ['Creamy', 'Savoury'], image: creamOnionImage,
   },
   {
     id: 'salt-pepper-makhana', slug: 'salt-pepper-makhana', name: 'Salt & Pepper Makhana',
     description: 'Rock salt and cracked pepper for a timeless, crisp finish.',
-    price: 249, weight: '70gm', rating: '4.7', reviews: 108, badge: 'Classic',
+    price: 224, weight: '70gm', rating: '4.7', reviews: 108, badge: 'Classic',
     tags: ['Crunchy', 'Peppery'], image: saltPepperImage,
   },
 ];

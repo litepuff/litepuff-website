@@ -11,8 +11,8 @@ export default function CartSummary({ items = [], coupon = null }) {
     <div className="mt-2.5 space-y-1.5 text-xs leading-5">
       <SummaryRow label="Subtotal">{formatMoney(pricing.subtotal)}</SummaryRow>
       <SummaryRow label="Product Discount"><span className="font-semibold text-[#1F5E3B]">{pricing.productDiscount ? `-${formatMoney(pricing.productDiscount)}` : '—'}</span></SummaryRow>
-      {pricing.firstOrderDiscount > 0 && <SummaryRow label="First Order Discount (10%)"><span className="font-semibold text-[#1F5E3B]">-{formatMoney(pricing.firstOrderDiscount)}</span></SummaryRow>}
-      <SummaryRow label="Coupon"><span className="font-semibold text-[#1F5E3B]">{pricing.couponDiscount ? `-${formatMoney(pricing.couponDiscount)}` : 'Available'}</span></SummaryRow>
+      <SummaryRow label="Selling Price Total"><strong>{formatMoney(pricing.sellingSubtotal)}</strong></SummaryRow>
+      <SummaryRow label={coupon?.firstOrder ? 'First Order Coupon' : 'Coupon'}><span className="font-semibold text-[#1F5E3B]">{pricing.couponDiscount ? `-${formatMoney(pricing.couponDiscount)}` : 'Available'}</span></SummaryRow>
       <SummaryRow label="Shipping">{pricing.shipping ? formatMoney(pricing.shipping) : <span className="font-medium text-[#1E4D3A]">Free</span>}</SummaryRow>
       <SummaryRow label="Tax">Included</SummaryRow>
       <SummaryRow label="Estimated delivery"><span className="inline-flex items-center gap-1.5"><FiTruck aria-hidden="true" />2–4 Days</span></SummaryRow>

@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { appendRow, batchUpdateRows, deleteRow, getRows, updateRow } from "./googleSheets.js";
+import { productPricing } from "../utils/productPricing.js";
 
 const money = (value) => Number(Number(value || 0).toFixed(2));
 const discountMoney = (value) => Math.round(Number(value || 0));
@@ -76,9 +77,7 @@ async function pricedCart(customerId, requestedItems = []) {
     );
     if (!product || Number(product.Stock || 0) < item.quantity)
       throw httpError("One or more cart items are unavailable.", 409);
-    const originalPrice = money(product.Price);
-    const salePrice = Number(product.DiscountPrice || 0);
-    const price = salePrice > 0 && salePrice < originalPrice ? money(salePrice) : originalPrice;
+    const { mrp: originalPrice, sellingPrice: price } = productPricing();
     return {
       productId: product.ProductID,
       productName: product.Name,
@@ -113,19 +112,22 @@ export function calculateOrderPricing({ items, couponDiscount = 0, freeShipping 
   const productDiscount = money(items.reduce((sum, item) => sum + Number(item.productDiscount || 0), 0));
   const sellingSubtotal = money(subtotal - productDiscount);
   const quantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const firstOrderDiscount = firstOrderEligible ? discountMoney(sellingSubtotal * 0.10) : 0;
+  // First-order savings are represented by the validated coupon discount.
+  // Never add another automatic 10% on top of that coupon.
+  const firstOrderDiscount = 0;
   const shipping = freeShipping || quantity >= 2 ? 0 : quantity === 1 ? 29 : 0;
   const normalizedCouponDiscount = money(Math.min(sellingSubtotal, Math.max(0, couponDiscount)));
   const discount = money(productDiscount + firstOrderDiscount + normalizedCouponDiscount);
   return { quantity, subtotal, productDiscount, sellingSubtotal, discountedSubtotal: sellingSubtotal, firstOrderDiscount, couponDiscount: normalizedCouponDiscount, shipping, discount, tax: 0, grandTotal: money(Math.max(0, sellingSubtotal - firstOrderDiscount - normalizedCouponDiscount + shipping)) };
 }
 
-async function priceCoupon(code, subtotal, customerId) {
+async function priceCoupon(code, subtotal, customerId, { firstOrderEligible = false, firstOrderAllowed = false } = {}) {
   const normalized = String(code || "")
     .trim()
     .toUpperCase();
   if (!normalized) return { code: "", discount: 0, row: null };
-  const coupon = (await getRows("COUPONS")).find(
+  const [coupons, orders] = await Promise.all([getRows("COUPONS"), getRows("ORDERS")]);
+  const coupon = coupons.find(
     (row) =>
       String(row.Code).trim().toUpperCase() === normalized &&
       String(row.Status).toLowerCase() === "active",
@@ -140,14 +142,15 @@ async function priceCoupon(code, subtotal, customerId) {
     Number(coupon.UsedCount || 0) >= Number(coupon.UsageLimit)
   )
     throw httpError("Coupon usage limit reached.", 409);
-  if (
-    normalized === "PUFFFIRST" &&
-    (await getRows("ORDERS")).some(
-      (order) =>
-        order.CustomerID === customerId && order.PaymentStatus === "Paid",
-    )
-  )
-    throw httpError("PUFFFIRST is available on your first order only.", 409);
+  const previouslyUsed = orders.some((order) =>
+    order.CustomerID === customerId &&
+    String(order.CouponCode || "").trim().toUpperCase() === normalized &&
+    !["cancelled", "failed"].includes(String(order.OrderStatus).toLowerCase())
+  );
+  if (previouslyUsed) throw httpError("This coupon has already been used by your account. Your product discount is still applied.", 409);
+  if (["LITEPUFF10", "PUFFFIRST"].includes(normalized) && (!firstOrderAllowed || !firstOrderEligible)) {
+    throw httpError("This first-order coupon is not available for this account. Your product discount is still applied.", 409);
+  }
   let discount =
     coupon.Type === "flat"
       ? Number(coupon.Value || 0)
@@ -176,9 +179,9 @@ export async function buildCheckoutIntent({
   const pricedItems = await pricedCart(customerId, items);
   const preliminary = calculateOrderPricing({ items: pricedItems });
   const { discountedSubtotal } = preliminary;
-  const coupon = await priceCoupon(couponCode, discountedSubtotal, customerId);
   const firstOrderEligible = firstOrderAllowed && await firstOrderEligibility(customerId, paymentId);
-  const pricing = calculateOrderPricing({ items: pricedItems, couponDiscount: coupon.discount, freeShipping: coupon.freeShipping, firstOrderEligible });
+  const coupon = await priceCoupon(couponCode, discountedSubtotal, customerId, { firstOrderEligible, firstOrderAllowed });
+  const pricing = calculateOrderPricing({ items: pricedItems, couponDiscount: coupon.discount, freeShipping: coupon.freeShipping, firstOrderEligible: false });
   const snapshot = {
     paymentId,
     customerId,

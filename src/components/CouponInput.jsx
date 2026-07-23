@@ -7,6 +7,7 @@ import { useCart } from '../context/CartContext.jsx';
 export default function CouponInput({ onApply }) {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const { cartTotal } = useCart();
 
   async function handleSubmit(event) {
@@ -16,10 +17,13 @@ export default function CouponInput({ onApply }) {
     try {
       const result = await contentService.validateCoupon({ code: normalizedCode, subtotal: cartTotal });
       setStatus('applied');
+      setErrorMessage('');
       localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
       onApply?.(result.coupon);
-    } catch {
+    } catch (error) {
       setStatus('invalid');
+      setErrorMessage(error.response?.data?.message || 'This coupon is not available. Your product discount is still applied.');
+      localStorage.removeItem('litepuffCoupon');
     }
   }
 
@@ -38,7 +42,7 @@ export default function CouponInput({ onApply }) {
         />
         <button type="submit" disabled={!code.trim() || status === 'applied'} className="h-11 rounded-xl bg-[#1E4D3A] px-5 text-sm font-bold text-white transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-[#2C614A] disabled:cursor-not-allowed disabled:opacity-50">{status === 'applied' ? 'Applied' : 'Apply'}</button>
       </div>
-      <AnimatePresence mode="wait">{status !== 'idle' && <motion.p key={status} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role={status === 'invalid' ? 'alert' : 'status'} className={`mt-3 flex items-center gap-2 text-xs font-semibold ${status === 'applied' ? 'text-[#1E6A45]' : 'text-[#9A392F]'}`}>{status === 'applied' && <FiCheck aria-hidden="true" />}{status === 'applied' ? 'LITEPUFF10 applied — 10% savings shown below.' : 'That code is not available. Try LITEPUFF10.'}</motion.p>}</AnimatePresence>
+      <AnimatePresence mode="wait">{status !== 'idle' && <motion.p key={status} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role={status === 'invalid' ? 'alert' : 'status'} className={`mt-3 flex items-center gap-2 text-xs font-semibold ${status === 'applied' ? 'text-[#1E6A45]' : 'text-[#9A392F]'}`}>{status === 'applied' && <FiCheck aria-hidden="true" />}{status === 'applied' ? 'First-order coupon applied — extra 10% shown below.' : errorMessage}</motion.p>}</AnimatePresence>
     </form>
   );
 }

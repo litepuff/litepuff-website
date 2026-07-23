@@ -1,8 +1,10 @@
 import { appendRow, deleteRow, getRows, updateRow } from '../services/googleSheets.js';
 import { createId } from '../utils/createId.js';
 import { created, ok } from '../utils/apiResponse.js';
+import { productPricing } from '../utils/productPricing.js';
 
 function publicCartItem(row, product) {
+  const pricing = productPricing();
   return {
     id: row.CartID,
     cartId: row.CartID,
@@ -15,7 +17,9 @@ function publicCartItem(row, product) {
       id: product.ProductID,
       name: product.Name,
       slug: product.Slug,
-      price: Number(product.DiscountPrice || product.Price || 0),
+      price: pricing.sellingPrice,
+      regularPrice: pricing.mrp,
+      oldPrice: pricing.mrp,
       stock: Number(product.Stock || 0),
       image: product.PrimaryImage,
       status: product.Status
