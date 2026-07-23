@@ -1,3 +1,34 @@
-import { FiArrowUpRight, FiMail, FiPhone } from 'react-icons/fi';
-import { siteConfig } from '../../utils/siteConfig';
-export default function SupportCard(){return <section className="rounded-[28px] bg-[#1E4D3A] p-6 text-white sm:p-7"><p className="text-[10px] font-bold tracking-[.2em] text-[#E7C77F]">WE'RE HERE</p><h2 className="mt-1 text-3xl font-semibold">Need Help?</h2><div className="mt-4 grid gap-2 text-sm text-white/80"><a href={`mailto:${siteConfig.email}`} className="flex items-center gap-2"><FiMail/>{siteConfig.email}</a><a href={`tel:${siteConfig.phone.replace(/\s/g,'')}`} className="flex items-center gap-2"><FiPhone/>{siteConfig.phone}</a></div><a href="/contact" className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#1E4D3A]">Contact Support <FiArrowUpRight/></a></section>}
+import { FiArrowUpRight, FiMail, FiPhone } from "react-icons/fi";
+import { siteConfig } from "../../utils/siteConfig";
+export default function SupportCard() {
+  return (
+    <section className="w-full min-w-0 max-w-full overflow-hidden rounded-[28px] bg-[#1E4D3A] p-5 text-white sm:p-7">
+      <p className="text-[10px] font-bold tracking-[.2em] text-[#E7C77F]">
+        WE'RE HERE
+      </p>
+      <h2 className="mt-1 text-3xl font-semibold">Need Help?</h2>
+      <div className="mt-4 grid gap-2 text-sm text-white/80">
+        <a
+          href={`mailto:${siteConfig.email}`}
+          className="flex items-center gap-2"
+        >
+          <FiMail />
+          {siteConfig.email}
+        </a>
+        <a
+          href={`tel:${siteConfig.phone.replace(/\s/g, "")}`}
+          className="flex items-center gap-2"
+        >
+          <FiPhone />
+          {siteConfig.phone}
+        </a>
+      </div>
+      <a
+        href="/contact"
+        className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#1E4D3A]"
+      >
+        Contact Support <FiArrowUpRight />
+      </a>
+    </section>
+  );
+}

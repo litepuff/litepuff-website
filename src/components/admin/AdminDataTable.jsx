@@ -43,8 +43,8 @@ export default function AdminDataTable({ title, description, columns, rows, load
           <tbody>
             {loading ? Array.from({ length: 5 }).map((_, index) => (
               <tr key={index} className="border-t border-brand-border">
-                {columns.map((column) => <td key={column.key} className="px-5 py-4"><div className="h-4 w-28 animate-pulse rounded-full bg-brand-border" /></td>)}
-                {actions ? <td className="px-5 py-4"><div className="h-4 w-20 animate-pulse rounded-full bg-brand-border" /></td> : null}
+                {columns.map((column) => <td key={column.key} className="px-5 py-4"><div className="h-4 w-28 rounded-full bg-brand-border" /></td>)}
+                {actions ? <td className="px-5 py-4"><div className="h-4 w-20 rounded-full bg-brand-border" /></td> : null}
               </tr>
             )) : null}
             {!loading && pagedRows.map((row, index) => (

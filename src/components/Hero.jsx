@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiCheckCircle } from 'react-icons/fi';
 import heroFallback from '../assets/images/hero/hero-img-1.png';
-
-const HERO_SLIDE_DURATION = 6000;
 
 const heroImageModules = import.meta.glob('../assets/images/hero/*.{png,jpg,jpeg,webp}', {
   eager: true,
@@ -45,29 +43,16 @@ function resolveHeroImage(slideId) {
 }
 
 export default function Hero() {
-  const [activeSlide, setActiveSlide] = useState(0);
-
   const slides = useMemo(
     () => heroSlides.map((slide) => ({ ...slide, src: resolveHeroImage(slide.id) })),
     [],
   );
-
-  useEffect(() => {
-    if (slides.length <= 1) return undefined;
-
-    const interval = window.setInterval(() => {
-      setActiveSlide((current) => (current + 1) % slides.length);
-    }, HERO_SLIDE_DURATION);
-
-    return () => window.clearInterval(interval);
-  }, [slides.length]);
+  const activeSlide = slides[0];
 
   return (
     <section className="home-hero relative overflow-hidden bg-[#243029]" aria-label="LitePuff premium snacks hero">
-      <div className="absolute inset-0" aria-live="polite">
-        {slides.map((slide, index) => (
-          <img key={slide.id} src={slide.src} alt={index === activeSlide ? slide.title : ''} className={['absolute inset-0 h-full w-full object-cover object-[62%_center] opacity-0 transition-opacity duration-[700ms] sm:object-center', index === activeSlide ? 'opacity-100' : ''].join(' ')} loading={index === 0 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'auto'} decoding="async" onError={(event) => { event.currentTarget.src = heroFallback; }} />
-        ))}
+      <div className="absolute inset-0">
+        <img src={activeSlide.src} alt={activeSlide.title} className="absolute inset-0 h-full w-full object-cover object-[62%_center] sm:object-center" loading="eager" fetchPriority="high" decoding="async" onError={(event) => { event.currentTarget.src = heroFallback; }} />
       </div>
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.65)_0%,rgba(0,0,0,0.40)_38%,rgba(0,0,0,0.08)_68%,transparent_100%)]" aria-hidden="true" />
 
@@ -104,9 +89,6 @@ export default function Hero() {
             ))}
           </motion.div>
         </div>
-      </div>
-      <div className="absolute bottom-5 left-1/2 z-20 flex w-[min(320px,72vw)] -translate-x-1/2 gap-1.5" aria-label="Hero slides">
-        {slides.map((slide, index) => <button key={slide.id} type="button" className={['h-1 flex-1 rounded-full transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white', index === activeSlide ? 'bg-white' : 'bg-white/35 hover:bg-[#F2D58F]'].join(' ')} aria-label={`Show ${slide.title}`} aria-current={index === activeSlide ? 'true' : undefined} onClick={() => setActiveSlide(index)} />)}
       </div>
     </section>
   );
