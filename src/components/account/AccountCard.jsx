@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
 import { FiEdit3, FiLogOut, FiX } from "react-icons/fi";
 import FormField from "./FormField";
+import { apiMessage, customerService } from "../../services/customerService.js";
+import { useToast } from "../../context/ToastContext.jsx";
+
+const countryCodes = [
+  ["India", "+91"],
+  ["United States", "+1"],
+  ["United Kingdom", "+44"],
+  ["United Arab Emirates", "+971"],
+  ["Singapore", "+65"],
+  ["Australia", "+61"],
+  ["Canada", "+1"],
+];
 
 export default function AccountCard({
   customer,
@@ -8,10 +20,13 @@ export default function AccountCard({
   onEditing,
   onSave,
   onLogoutAll,
+  onIdentityChanged,
 }) {
+  const { showToast } = useToast();
   const [form, setForm] = useState(customer);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [identity, setIdentity] = useState(null);
 
   useEffect(() => setForm(customer), [customer]);
 
@@ -21,10 +36,44 @@ export default function AccountCard({
     setMessage("");
     try {
       await onSave({ firstName: form.firstName, lastName: form.lastName });
-      setMessage("Your account has been updated.");
+      setMessage("Profile updated.");
+      showToast("Profile updated.");
       onEditing(false);
+    } catch (error) {
+      showToast(apiMessage(error), "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  const openIdentity = (type) =>
+    setIdentity({ type, value: "", countryCode: "+91", otp: "", otpId: "", destination: "", busy: false });
+
+  async function submitIdentity(event) {
+    event.preventDefault();
+    if (identity.busy) return;
+    const value = identity.type === "phone"
+      ? identity.value.startsWith("+") ? identity.value : `${identity.countryCode}${identity.value.replace(/\D/g, "")}`
+      : identity.value.trim().toLowerCase();
+    setIdentity((current) => ({ ...current, busy: true }));
+    try {
+      if (!identity.otpId) {
+        const result = identity.type === "phone"
+          ? await customerService.changePhoneStart(value)
+          : await customerService.changeEmailStart(value);
+        setIdentity((current) => ({ ...current, value, otpId: result.otpId, destination: result.destination, busy: false }));
+        showToast(`OTP sent to ${result.destination}.`);
+        return;
+      }
+      const result = identity.type === "phone"
+        ? await customerService.verifyPhoneChange(identity.otpId, identity.value, identity.otp)
+        : await customerService.verifyEmailChange(identity.otpId, identity.value, identity.otp);
+      await onIdentityChanged(result.profile);
+      showToast(`${identity.type === "phone" ? "Phone number" : "Email"} verified and updated.`);
+      setIdentity(null);
+    } catch (error) {
+      setIdentity((current) => ({ ...current, busy: false }));
+      showToast(apiMessage(error), "error");
     }
   }
 
@@ -92,10 +141,15 @@ export default function AccountCard({
             label="Phone"
             value={form.phone || ""}
             disabled
-            hint="Phone changes require WhatsApp verification."
+            hint="Use Change Phone to verify a new number."
           />
+          <FormField label="Email" value={form.email || ""} disabled />
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <button type="button" onClick={() => openIdentity("phone")} className="h-11 rounded-full border border-[#1E4D3A] px-5 text-sm font-semibold text-[#1E4D3A]">Change Phone</button>
+            <button type="button" onClick={() => openIdentity("email")} className="h-11 rounded-full border border-[#1E4D3A] px-5 text-sm font-semibold text-[#1E4D3A]">Change Email</button>
+          </div>
           <div className="sm:col-span-2">
-            <button className="h-11 w-full rounded-full bg-[#1E4D3A] px-6 text-sm font-semibold text-white sm:w-auto">
+            <button disabled={saving} className="h-11 w-full rounded-full bg-[#1E4D3A] px-6 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
               {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>
@@ -134,6 +188,32 @@ export default function AccountCard({
             </button>
           </div>
         </>
+      )}
+      {identity && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#14251D]/40 sm:items-center sm:p-5">
+          <form onSubmit={submitIdentity} className="w-full max-w-md rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-2xl font-semibold">{identity.otpId ? "Enter verification code" : `Change ${identity.type}`}</h3>
+              <button type="button" disabled={identity.busy} onClick={() => setIdentity(null)} className="grid h-11 w-11 place-items-center rounded-full" aria-label="Close verification"><FiX /></button>
+            </div>
+            {identity.otpId ? (
+              <>
+                <p className="mt-2 text-sm text-[#68706B]">Enter the 6-digit code sent to {identity.destination}.</p>
+                <FormField name="otp" label="Verification code" value={identity.otp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" onChange={(event) => setIdentity({ ...identity, otp: event.target.value.replace(/\D/g, "") })} />
+              </>
+            ) : identity.type === "phone" ? (
+              <div className="mt-5 grid grid-cols-[120px_minmax(0,1fr)] gap-2">
+                <label className="grid gap-2 text-sm font-semibold">Country<select value={identity.countryCode} onChange={(event) => setIdentity({ ...identity, countryCode: event.target.value })} className="h-14 rounded-2xl border border-[#DED9CF] bg-white px-3">{countryCodes.map(([name, code]) => <option key={`${name}-${code}`} value={code}>{code} {name}</option>)}</select></label>
+                <FormField name="phone" label="Phone number" value={identity.value} inputMode="tel" autoComplete="tel-national" onChange={(event) => setIdentity({ ...identity, value: event.target.value })} />
+              </div>
+            ) : (
+              <div className="mt-5"><FormField name="email" label="New email" type="email" value={identity.value} autoComplete="email" onChange={(event) => setIdentity({ ...identity, value: event.target.value })} /></div>
+            )}
+            <button disabled={identity.busy || (identity.otpId ? identity.otp.length !== 6 : !identity.value.trim())} className="mt-6 h-12 w-full rounded-full bg-[#1E4D3A] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+              {identity.busy ? "Please wait…" : identity.otpId ? "Verify OTP" : "Send OTP"}
+            </button>
+          </form>
+        </div>
       )}
     </section>
   );

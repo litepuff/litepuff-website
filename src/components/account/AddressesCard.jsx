@@ -15,9 +15,19 @@ export default function AddressesCard({ addresses, onSave, onDelete }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState("");
   const open = (address = null) => {
     setEditing(address?.id || "new");
     setForm(address || empty);
+  };
+  const remove = async (id) => {
+    if (deleting) return;
+    setDeleting(id);
+    try {
+      await onDelete(id);
+    } finally {
+      setDeleting("");
+    }
   };
   const submit = async (e) => {
     e.preventDefault();
@@ -43,8 +53,10 @@ export default function AddressesCard({ addresses, onSave, onDelete }) {
           <h2 className="mt-1 text-3xl font-semibold">Saved Addresses</h2>
         </div>
         <button
+          type="button"
+          disabled={saving || Boolean(deleting)}
           onClick={() => open()}
-          className="flex h-10 items-center gap-2 rounded-full bg-[#1E4D3A] px-4 text-xs font-semibold text-white"
+          className="flex h-11 items-center gap-2 rounded-full bg-[#1E4D3A] px-4 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           <FiPlus /> Add New
         </button>
@@ -75,16 +87,20 @@ export default function AddressesCard({ addresses, onSave, onDelete }) {
             </p>
             <div className="mt-3 flex gap-4 text-xs font-semibold">
               <button
+                type="button"
+                disabled={saving || Boolean(deleting)}
                 onClick={() => open(address)}
-                className="flex items-center gap-1 text-[#1E4D3A]"
+                className="flex min-h-11 items-center gap-1 text-[#1E4D3A] disabled:opacity-50"
               >
                 <FiEdit2 /> Edit
               </button>
               <button
-                onClick={() => onDelete(address.id)}
-                className="flex items-center gap-1 text-[#9A392F]"
+                type="button"
+                disabled={saving || Boolean(deleting)}
+                onClick={() => remove(address.id)}
+                className="flex min-h-11 items-center gap-1 text-[#9A392F] disabled:opacity-50"
               >
-                <FiTrash2 /> Delete
+                <FiTrash2 /> {deleting === address.id ? "Deleting…" : "Delete"}
               </button>
             </div>
           </article>
@@ -119,17 +135,20 @@ export default function AddressesCard({ addresses, onSave, onDelete }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 label="Address name"
+                required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
               <FormField
                 label="Phone"
+                required
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
               <div className="sm:col-span-2">
                 <FormField
                   label="Address line"
+                  required
                   value={form.addressLine}
                   onChange={(e) =>
                     setForm({ ...form, addressLine: e.target.value })
@@ -138,16 +157,21 @@ export default function AddressesCard({ addresses, onSave, onDelete }) {
               </div>
               <FormField
                 label="City"
+                required
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
               />
               <FormField
                 label="State"
+                required
                 value={form.state}
                 onChange={(e) => setForm({ ...form, state: e.target.value })}
               />
               <FormField
                 label="Pincode"
+                required
+                inputMode="numeric"
+                pattern="[0-9]{4,10}"
                 value={form.pincode}
                 onChange={(e) => setForm({ ...form, pincode: e.target.value })}
               />

@@ -27,6 +27,12 @@ export default function Profile() {
   const [wishlist, setWishlist] = useState([]);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const refreshCustomer = useCallback(async () => {
+    const result = await customerService.profile();
+    updateCustomer(result.customer);
+    return result.customer;
+  }, [updateCustomer]);
   const load = useCallback(async () => {
     try {
       const [orderData, addressData, wishlistData] = await Promise.all([
@@ -40,6 +46,8 @@ export default function Profile() {
       setError("");
     } catch (err) {
       setError(apiMessage(err));
+    } finally {
+      setLoading(false);
     }
   }, []);
   useEffect(() => {
@@ -91,16 +99,29 @@ export default function Profile() {
     updateCustomer(result.customer);
   };
   const saveAddress = async (id, data) => {
-    if (id) await customerService.updateAddress(id, data);
-    else await customerService.addAddress(data);
-    const result = await customerService.addresses();
-    setAddresses(result.addresses);
+    try {
+      if (id) await customerService.updateAddress(id, data);
+      else await customerService.addAddress(data);
+      const [result] = await Promise.all([customerService.addresses(), refreshCustomer()]);
+      setAddresses(result.addresses);
+      showToast("Address saved.");
+    } catch (err) {
+      showToast(apiMessage(err), "error");
+      throw err;
+    }
   };
   const deleteAddress = async (id) => {
     const confirmed = await confirmAction({ title: "Remove saved address?", message: "This delivery address will be removed from your account.", confirmLabel: "Remove", destructive: true });
     if (!confirmed) return;
-    await customerService.removeAddress(id);
-    setAddresses((items) => items.filter((item) => item.id !== id));
+    try {
+      await customerService.removeAddress(id);
+      const [result] = await Promise.all([customerService.addresses(), refreshCustomer()]);
+      setAddresses(result.addresses);
+      showToast("Address deleted.");
+    } catch (err) {
+      showToast(apiMessage(err), "error");
+      throw err;
+    }
   };
   const removeWishlist = async (id) => {
     await customerService.removeWishlist(id);
@@ -129,6 +150,11 @@ export default function Profile() {
           {error && (
             <div className="mb-5 rounded-2xl bg-[#FFF0EC] p-4 text-sm text-[#9A392F]">
               {error}
+            </div>
+          )}
+          {loading && (
+            <div role="status" className="mb-5 rounded-2xl border border-[#E9E4DA] bg-white p-4 text-sm text-[#68706B]">
+              Loading your account…
             </div>
           )}
           <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -162,6 +188,10 @@ export default function Profile() {
                 onEditing={setEditing}
                 onSave={saveProfile}
                 onLogoutAll={signOutEverywhere}
+                onIdentityChanged={async (profile) => {
+                  updateCustomer(profile);
+                  await refreshCustomer();
+                }}
               />
               <NewsletterCard
                 subscribed={customer.marketingConsent}

@@ -11,7 +11,7 @@ let metadataCache;
 let metadataExpiresAt = 0;
 const rowCache = new Map();
 const CACHE_TTL_MS = Number(process.env.GOOGLE_SHEETS_CACHE_TTL_MS || 60_000);
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 2;
 const inFlightReads = new Map();
 let mutationQueue = Promise.resolve();
 const DEPENDENTS = SHEET_DEPENDENCIES;
@@ -43,7 +43,7 @@ async function request(path, options = {}, attempt = 0) {
   try {
     response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${googleSheetsConfig.spreadsheetId}${path}`, {
       ...options,
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(8_000),
       headers: {
         Authorization: `Bearer ${await accessToken()}`,
         'Content-Type': 'application/json',
@@ -70,7 +70,9 @@ async function request(path, options = {}, attempt = 0) {
     }
     const permissionHint = response.status === 403 ? ` Share the spreadsheet with ${googleSheetsConfig.serviceAccountEmail} as Editor and ensure the Google Sheets API is enabled.` : '';
     const code = response.status === 403 ? 'GOOGLE_SHEETS_PERMISSION_DENIED' : response.status === 404 ? 'GOOGLE_SPREADSHEET_NOT_FOUND' : response.status === 429 ? 'GOOGLE_SHEETS_RATE_LIMITED' : 'GOOGLE_SHEETS_API_ERROR';
-    const error = new AppError(`${payload?.error?.message || 'Google Sheets API request failed.'}${permissionHint}`, { status: response.status === 404 ? 503 : response.status, code, details: { step: 'spreadsheet-request', googleStatus: response.status, googleResponse: safeGooglePayload(payload) }, expose: true });
+    const unavailable = response.status === 429 || response.status >= 500;
+    const message = unavailable ? 'Store data is temporarily busy. Please try again in a moment.' : `${payload?.error?.message || 'Google Sheets API request failed.'}${permissionHint}`;
+    const error = new AppError(message, { status: unavailable || response.status === 404 ? 503 : response.status, code, details: { step: 'spreadsheet-request', googleStatus: response.status, googleResponse: safeGooglePayload(payload) }, expose: true });
     googleCredentialProvider.markFailure(error);
     throw error;
   }

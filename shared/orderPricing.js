@@ -1,5 +1,10 @@
-export const money = (value) => Number(Number(value || 0).toFixed(2));
-export const discountMoney = (value) => Math.round(Number(value || 0));
+const finiteNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+export const money = (value) => Number(finiteNumber(value).toFixed(2));
+export const discountMoney = (value) => Math.round(finiteNumber(value));
 export const ONLINE_COUPON_CODE = 'LITEPUFF20';
 
 export function calculateOrderPricing({

@@ -2,6 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { customerService } from '../services/customerService';
 
 const CustomerAuthContext = createContext(null);
+let restoreRequest;
+
+const restoreCustomer = () => {
+  restoreRequest ||= customerService.me().finally(() => { restoreRequest = null; });
+  return restoreRequest;
+};
 
 export function CustomerAuthProvider({ children }) {
   const [customer, setCustomer] = useState(null);
@@ -9,7 +15,7 @@ export function CustomerAuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
-    customerService.me().then(async ({ customer: restored }) => {
+    restoreCustomer().then(async ({ customer: restored }) => {
       if (!active) return;
       setCustomer(restored);
       await mergeGuestCart(restored.id);

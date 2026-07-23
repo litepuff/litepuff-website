@@ -17,7 +17,14 @@ import contentRoutes from './routes/contentRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import productionRoutes from './routes/productionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
-import { csrfArchitectureGuard, securityStack, webhookLimiter } from './middleware/securityMiddleware.js';
+import {
+  csrfArchitectureGuard,
+  securityStack,
+  apiLimiter,
+  authLimiter,
+  paymentLimiter,
+  webhookLimiter
+} from './middleware/securityMiddleware.js';
 import { paymentWebhook } from './controllers/paymentController.js';
 import healthRoutes from './routes/healthRoutes.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
@@ -96,14 +103,15 @@ app.disable('x-powered-by');
 app.use((request, response, next) => { request.id = request.get('x-request-id') || crypto.randomUUID(); response.set('x-request-id', request.id); next(); });
 const allowedOrigins = new Set([env.clientUrl, env.appUrl].filter(Boolean));
 app.use(cors({ origin: (origin, callback) => !origin || allowedOrigins.has(origin) ? callback(null, true) : callback(new AppError('Request origin is not allowed.', { status: 403, code: 'CORS_ORIGIN_REJECTED' })), credentials: true }));
+app.use(requestLogger);
 app.post('/api/payment/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '256kb' }), (request, response, next) => Promise.resolve(paymentWebhook(request, response, next)).catch(next));
-app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser(env.cookieSecret));
 app.use(securityStack);
 app.use(csrfArchitectureGuard);
 app.use('/api', responseEnvelope);
-app.use(requestLogger);
+
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 app.use('/uploads', express.static(uploadFolder));
 
 app.use('/api/health', healthRoutes);

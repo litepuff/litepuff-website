@@ -68,7 +68,7 @@ export function CartProvider({ children }) {
     addToCart,
     updateQuantity,
     clearCart
-  }), [cartItems, cartTotal, cartCount]);
+  }), [cartItems, cartTotal, cartCount, customer]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -152,8 +152,7 @@ export async function buildCheckoutIntent({
 }) {
   const pricedItems = await pricedCart(customerId, items);
   const preliminary = calculateOrderPricing({ items: pricedItems });
-  const { discountedSubtotal } = preliminary;
-  const coupon = await priceOnlineCoupon(couponCode, discountedSubtotal, paymentMethod);
+  const coupon = await priceOnlineCoupon(couponCode, preliminary.subtotal, paymentMethod);
   const pricing = calculateOrderPricing({
     items: pricedItems,
     couponCode: coupon.code,

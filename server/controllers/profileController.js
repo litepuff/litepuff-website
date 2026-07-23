@@ -76,6 +76,10 @@ export async function addAddress(request, response) {
     IsDefault: Boolean(isDefault),
     CreatedAt: new Date().toISOString()
   };
+  if (row.IsDefault) {
+    const currentDefaults = (await getRows('ADDRESSES')).filter((item) => item.CustomerID === request.customer.id && String(item.IsDefault).toLowerCase() === 'true');
+    await Promise.all(currentDefaults.map((item) => updateRow('ADDRESSES', item._row, { ...item, IsDefault: false })));
+  }
   await appendRow('ADDRESSES', row);
   created(response, { address: publicAddress(row) }, 'Address saved.');
 }
@@ -102,6 +106,10 @@ export async function updateAddress(request, response) {
   Object.entries(fields).forEach(([input, column]) => {
     if (request.body[input] !== undefined) row[column] = input === 'isDefault' ? Boolean(request.body[input]) : request.body[input];
   });
+  if (String(row.IsDefault).toLowerCase() === 'true') {
+    const currentDefaults = (await getRows('ADDRESSES')).filter((item) => item.CustomerID === request.customer.id && item.AddressID !== row.AddressID && String(item.IsDefault).toLowerCase() === 'true');
+    await Promise.all(currentDefaults.map((item) => updateRow('ADDRESSES', item._row, { ...item, IsDefault: false })));
+  }
   await updateRow('ADDRESSES', row._row, row);
   ok(response, { address: publicAddress(row) }, 'Address updated.');
 }

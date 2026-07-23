@@ -45,7 +45,19 @@ export const customerService = {
   sessions: () => customerApi.get('/account/sessions').then(payload),
   recover: (data) => customerApi.post('/account/recover', data).then(payload),
   profile: () => customerApi.get('/account/profile').then(payload).then((result) => ({ ...result, customer: result.profile })),
-  updateProfile: (data) => customerApi.put('/account/profile', { firstName: data.firstName, lastName: data.lastName, marketingConsent: data.marketingConsent ?? data.newsletter }).then(payload).then((result) => ({ ...result, customer: result.profile })),
+ updateProfile: (data) =>
+  customerApi
+    .put("/account/profile", {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      marketingConsent:
+        data.marketingConsent ?? data.newsletter,
+    })
+    .then(payload)
+    .then((result) => ({
+      ...result,
+      customer: result.profile,
+    })),
   orders: () => customerApi.get('/orders').then(payload),
   order: (id) => customerApi.get(`/orders/${id}`).then(payload),
   tracking: (orderId) => customerApi.get(`/tracking/${orderId}`).then(payload),
@@ -67,6 +79,38 @@ export const customerService = {
   recordPaymentFailure: (data) => customerApi.post('/payment/failure', data).then(payload),
   payment: (paymentId) => customerApi.get(`/payment/${paymentId}`).then(payload),
   liveShipmentTracking: (orderId) => customerApi.get(`/shipping/tracking/${orderId}`).then(payload),
+changePhoneStart: (newPhone) =>
+  customerApi
+    .post("/account/change-phone", {
+      newPhone,
+    })
+    .then(payload),
+
+verifyPhoneChange: (otpId, newPhone, otp) =>
+  customerApi
+    .post("/account/change-phone", {
+      otpId,
+      newPhone,
+      otp,
+    })
+    .then(payload),
+
+changeEmailStart: (newEmail) =>
+  customerApi
+    .post("/account/change-email", {
+      newEmail,
+    })
+    .then(payload),
+
+verifyEmailChange: (otpId, newEmail, otp) =>
+  customerApi
+    .post("/account/change-email", {
+      otpId,
+      newEmail,
+      otp,
+    })
+    .then(payload),
+
 };
 
 export function apiMessage(error) {

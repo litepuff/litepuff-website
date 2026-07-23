@@ -1,50 +1,259 @@
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import compression from 'compression';
-import sanitizeHtml from 'sanitize-html';
-import { AppError } from '../utils/AppError.js';
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
+import sanitizeHtml from "sanitize-html";
+import { AppError } from "../utils/AppError.js";
+
+/* ----------------------------------------------------------
+   SANITIZER
+---------------------------------------------------------- */
 
 function sanitize(value) {
-  if (typeof value === 'string') return sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} }).trim();
-  if (Array.isArray(value)) return value.map(sanitize);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => { if (key.startsWith('$') || key.includes('.')) throw new AppError('Unsafe request key detected.', { status: 422, code: 'UNSAFE_INPUT' }); return [key, sanitize(item)]; }));
+  if (typeof value === "string") {
+    return sanitizeHtml(value, {
+      allowedTags: [],
+      allowedAttributes: {},
+    }).trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(sanitize);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => {
+        if (key.startsWith("$") || key.includes(".")) {
+          throw new AppError("Unsafe request key detected.", {
+            status: 422,
+            code: "UNSAFE_INPUT",
+          });
+        }
+
+        return [key, sanitize(item)];
+      })
+    );
+  }
+
   return value;
 }
 
+/* ----------------------------------------------------------
+   SECURITY STACK
+   (NO GLOBAL RATE LIMIT HERE)
+---------------------------------------------------------- */
+
 export const securityStack = [
   helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
+
+    crossOriginOpenerPolicy: {
+      policy: "same-origin-allow-popups",
+    },
+
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
-        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://*.razorpay.com'],
-        connectSrc: ["'self'", 'https://api.razorpay.com', 'https://*.razorpay.com'],
-        imgSrc: ["'self'", 'data:', 'https://*.razorpay.com'],
-        styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
-        fontSrc: ["'self'", 'https:', 'data:'],
+
+        scriptSrc: [
+          "'self'",
+          "https://checkout.razorpay.com",
+        ],
+
+        connectSrc: [
+          "'self'",
+          "https://api.razorpay.com",
+          "https://*.razorpay.com",
+        ],
+
+        frameSrc: [
+          "'self'",
+          "https://api.razorpay.com",
+          "https://*.razorpay.com",
+        ],
+
+        imgSrc: [
+          "'self'",
+          "data:",
+          "blob:",
+          "https://*.razorpay.com",
+        ],
+
+        styleSrc: [
+          "'self'",
+          "https:",
+          "'unsafe-inline'",
+        ],
+
+        fontSrc: [
+          "'self'",
+          "https:",
+          "data:",
+        ],
+
         objectSrc: ["'none'"],
+
         baseUri: ["'self'"],
+
         formAction: ["'self'"],
-        frameAncestors: ["'self'"]
-      }
-    }
+
+        frameAncestors: ["'self'"],
+      },
+    },
   }),
+
   compression(),
-  rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }),
-  (request, response, next) => {
-    response.removeHeader('X-Powered-By');
+
+  (req, res, next) => {
+    res.removeHeader("X-Powered-By");
     next();
   },
-  (request, response, next) => {
-    if (request.body) request.body = sanitize(request.body);
-    if (request.query) request.query = sanitize(request.query);
+
+  (req, res, next) => {
+    if (req.body) req.body = sanitize(req.body);
+
+    if (req.query) req.query = sanitize(req.query);
+
     next();
-  }
+  },
 ];
 
-export function csrfArchitectureGuard(request, response, next) { const unsafe = !['GET', 'HEAD', 'OPTIONS'].includes(request.method); const usesAuthCookie = Boolean(request.signedCookies?.lp_access || request.signedCookies?.lp_refresh); const origin = request.get('origin'); if (unsafe && usesAuthCookie && origin && ![process.env.FRONTEND_URL, process.env.APP_URL].filter(Boolean).includes(origin)) return next(new AppError('Request origin is not allowed.', { status: 403, code: 'CSRF_ORIGIN_REJECTED' })); next(); }
+/* ----------------------------------------------------------
+   GENERAL API LIMITER
+---------------------------------------------------------- */
 
-export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, handler: (request, response) => response.status(429).json({ success: false, error: 'Too many attempts. Please try again later.', code: 'RATE_LIMIT_EXCEEDED', details: {} }) });
-export const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false, handler: (request, response) => response.status(429).json({ success: false, error: 'Webhook rate limit exceeded.', code: 'RATE_LIMIT_EXCEEDED', details: {} }) });
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+
+  max:
+    process.env.NODE_ENV === "production"
+      ? 1000
+      : 10000,
+
+  standardHeaders: true,
+
+  legacyHeaders: false,
+
+  skip(req) {
+    return req.method === "OPTIONS";
+  },
+
+  handler(req, res) {
+    res.status(429).json({
+      success: false,
+      code: "RATE_LIMIT",
+      error:
+        "Too many requests. Please wait a minute and try again.",
+    });
+  },
+});
+
+/* ----------------------------------------------------------
+   AUTH LIMITER
+---------------------------------------------------------- */
+
+export const authLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+
+  max: 10,
+
+  skipSuccessfulRequests: true,
+
+  standardHeaders: true,
+
+  legacyHeaders: false,
+
+  handler(req, res) {
+    res.status(429).json({
+      success: false,
+      code: "AUTH_RATE_LIMIT",
+      error:
+        "Too many login attempts. Please wait 10 minutes.",
+    });
+  },
+});
+
+/* ----------------------------------------------------------
+   PAYMENT LIMITER
+---------------------------------------------------------- */
+
+export const paymentLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+
+  max: 30,
+
+  standardHeaders: true,
+
+  legacyHeaders: false,
+
+  handler(req, res) {
+    res.status(429).json({
+      success: false,
+      code: "PAYMENT_RATE_LIMIT",
+      error:
+        "Too many payment requests. Please wait a moment.",
+    });
+  },
+});
+
+/* ----------------------------------------------------------
+   WEBHOOK LIMITER
+---------------------------------------------------------- */
+
+export const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+
+  max: 300,
+
+  standardHeaders: true,
+
+  legacyHeaders: false,
+
+  handler(req, res) {
+    res.status(429).json({
+      success: false,
+      code: "WEBHOOK_RATE_LIMIT",
+      error: "Webhook rate limit exceeded.",
+    });
+  },
+});
+
+/* ----------------------------------------------------------
+   CSRF
+---------------------------------------------------------- */
+
+export function csrfArchitectureGuard(req, res, next) {
+  const unsafe = !["GET", "HEAD", "OPTIONS"].includes(
+    req.method
+  );
+
+  const usesCookies = Boolean(
+    req.signedCookies?.lp_access ||
+      req.signedCookies?.lp_refresh
+  );
+
+  const origin = req.get("origin");
+
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.APP_URL,
+  ].filter(Boolean);
+
+  if (
+    unsafe &&
+    usesCookies &&
+    origin &&
+    !allowedOrigins.includes(origin)
+  ) {
+    return next(
+      new AppError("Request origin is not allowed.", {
+        status: 403,
+        code: "CSRF_ORIGIN_REJECTED",
+      })
+    );
+  }
+
+  next();
+}

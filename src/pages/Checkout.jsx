@@ -240,6 +240,17 @@ export default function Checkout() {
       }
       await loadRazorpay();
       const payment = await customerService.createRazorpayOrder(payload);
+      const serverGrandTotal = Number(payment.pricing?.grandTotal);
+      const gatewayAmount = Number(payment.amount);
+      if (
+        !Number.isFinite(serverGrandTotal) ||
+        !Number.isFinite(gatewayAmount) ||
+        Math.round(serverGrandTotal * 100) !== gatewayAmount
+      ) {
+        throw new Error(
+          "We could not verify your checkout total. Please try again.",
+        );
+      }
       setServerPricing(payment.pricing || null);
       let confirmed;
       let confirmedPayment;

@@ -91,7 +91,7 @@ export default function CartDrawer({ isOpen, onClose, onCheckout, onApplyCoupon 
                   </div>
                 </div>
 
-                <footer className="sticky bottom-0 z-20 shrink-0 border-t border-[#ECE7DD] bg-white px-4 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(36,48,41,0.06)] sm:px-6">
+                <footer className="z-20 shrink-0 border-t border-[#ECE7DD] bg-white px-4 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(36,48,41,0.06)] sm:px-6">
                   <div className="space-y-2.5">
                     <CartSummary items={cartItems} coupon={coupon} />
 
