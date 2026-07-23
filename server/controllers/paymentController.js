@@ -171,6 +171,7 @@ async function createPaymentOrderUnlocked(request, response) {
     items: request.body.items,
     couponCode: request.body.couponCode || request.body.coupon,
     paymentId,
+    firstOrderAllowed: Boolean(request.auth),
   });
   const gatewayOrder = await createRazorpayOrder({
     receipt: paymentId,
@@ -229,6 +230,7 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
     items: request.body.items,
     couponCode: request.body.couponCode || request.body.coupon,
     paymentId,
+    firstOrderAllowed: Boolean(request.auth),
   });
   await appendRow("PAYMENTS", {
     PaymentID: paymentId,

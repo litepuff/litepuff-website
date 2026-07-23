@@ -14,6 +14,7 @@ import bananaChipsImage from '../assets/images/products/banana-chips.png';
 import ragiChipsImage from '../assets/images/products/ragi-chips.png';
 import beetrootChipsImage from '../assets/images/products/beetroot.png';
 import oatsChipsImage from '../assets/images/products/oats-chips.png';
+import { useProducts } from '../hooks/useProducts.js';
 
 export const shopProducts = [
   { id: 'peri-peri-makhana', slug: 'peri-peri-makhana', name: 'Peri Peri Makhana', tagline: 'Smoky heat. Seriously crisp.', shortDescription: 'Bold roasted makhana with tangy spice, smoky warmth and a clean crunch.', keywords: ['snack', 'fox nuts', 'lotus seeds', 'spicy', 'tangy', 'roasted'], price: 249, weight: '70g', rating: 4.9, reviewCount: 254, popularity: 98, isNewest: true, bestSeller: true, stock: 48, flavour: 'Peri Peri', category: 'Roasted Makhana', image: periPeriImage },
@@ -41,8 +42,7 @@ function ProductRating({ rating, reviewCount }) {
   return <div className="flex items-center gap-2" aria-label={`${rating} out of 5 stars from ${reviewCount} reviews`}><span className="flex text-[#C89B3C]" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <FiStar key={index} className="h-3.5 w-3.5 fill-current" />)}</span><span className="text-xs text-[#5F6762]">{rating} ({reviewCount})</span></div>;
 }
 
-function ProductPrice({ price }) {
-  const originalPrice = Math.ceil(price / 0.9);
+function ProductPrice({ price, originalPrice = 277 }) {
   const savings = originalPrice - price;
   return <div><div className="flex flex-wrap items-baseline gap-2"><span className="text-sm text-[#8A8F8C] line-through">{formatMoney(originalPrice)}</span><strong className="font-display text-[28px] font-semibold text-[#1F5E3B]">{formatMoney(price)}</strong><span className="rounded-full bg-[#E8F3EC] px-2 py-1 text-[10px] font-black text-[#1F5E3B]">10% OFF</span></div><p className="mt-1 text-xs font-semibold text-[#1F5E3B]">Save {formatMoney(savings)}</p><p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#D8C98F] bg-[#FCF8E8] px-2.5 py-1 text-[10px] font-bold text-[#766018]"><FiTag aria-hidden="true" /> Coupon available · LITEPUFF10</p></div>;
 }
@@ -61,6 +61,7 @@ const UpcomingCard = memo(function UpcomingCard({ product }) {
 
 export default function Shop() {
   const { addToCart } = useCart();
+  const { products: sheetProducts } = useProducts();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
@@ -74,15 +75,19 @@ export default function Shop() {
 
   const visibleProducts = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase().replace(/\s+/g, ' ');
-    let result = shopProducts.filter((product) => {
+    const catalogProducts = shopProducts.map((product) => {
+      const live = sheetProducts.find((item) => item.id === product.id || item.slug === product.slug);
+      return live ? { ...product, ...live, image: live.image || product.image, tagline: product.tagline, keywords: product.keywords, rating: product.rating, reviewCount: product.reviewCount, popularity: product.popularity, isNewest: product.isNewest } : { ...product, regularPrice: 277 };
+    });
+    let result = catalogProducts.filter((product) => {
       const searchableText = [product.name, product.category, product.flavour, product.tagline, product.shortDescription, ...product.keywords].join(' ').toLowerCase();
       return (!query || searchableText.includes(query)) && (flavourFilter === 'all' || product.flavour === flavourFilter) && (priceFilter === 'all' || (priceFilter === '200-300' && product.price >= 200 && product.price <= 300)) && (stockFilter === 'all' || product.stock > 0);
     });
     return result.sort((a, b) => sortBy === 'price-low' ? a.price - b.price : sortBy === 'price-high' ? b.price - a.price : sortBy === 'alpha' ? a.name.localeCompare(b.name) : sortBy === 'best' ? Number(b.bestSeller) - Number(a.bestSeller) : sortBy === 'popular' ? b.popularity - a.popularity : Number(b.isNewest) - Number(a.isNewest));
-  }, [debouncedSearch, flavourFilter, priceFilter, stockFilter, sortBy]);
+  }, [debouncedSearch, flavourFilter, priceFilter, sheetProducts, stockFilter, sortBy]);
 
   const activeChips = [flavourFilter !== 'all' && { label: flavourFilter, clear: () => setFlavourFilter('all') }, priceFilter !== 'all' && { label: '₹200–₹300', clear: () => setPriceFilter('all') }, stockFilter !== 'all' && { label: 'In Stock', clear: () => setStockFilter('all') }].filter(Boolean);
-  const handleAdd = (product) => addToCart({ ...product, originalPrice: Math.ceil(product.price / 0.9), images: [product.image], description: product.shortDescription });
+  const handleAdd = (product) => addToCart({ ...product, originalPrice: Number(product.regularPrice || product.oldPrice || 277), images: [product.image], description: product.shortDescription });
 
   return <><Seo title="Shop" description="Shop LitePuff roasted makhana and preview upcoming healthy snacks." path="/products" /><main className="bg-[#FAF8F2] pb-10 md:pb-16"><motion.header className="mx-auto max-w-7xl px-6 pb-7 pt-10 text-center md:pt-14 lg:px-8 lg:pt-16" initial="hidden" animate="visible" variants={fadeUp}><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C9A227]">Shop LitePuff</p><h1 className="mt-3 font-display text-[40px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[50px]">Discover Your Everyday Crunch</h1><p className="mx-auto mt-4 max-w-[600px] text-base leading-7 text-[#5F6762]">Premium roasted makhana in bold, balanced flavours for better everyday snacking.</p></motion.header><div className="mx-auto max-w-[1440px] px-6 lg:px-8"><ShopOfferRibbon /></div>
 

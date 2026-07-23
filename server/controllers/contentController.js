@@ -71,7 +71,8 @@ export async function validateCoupon(request, response) {
 
   let discount = 0;
   let freeShipping = false;
-  if (coupon.Type === 'percent') discount = subtotal * (Number(coupon.Value || 0) / 100);
+  if (coupon.Type === 'percent') discount = Math.round(subtotal * (Number(coupon.Value || 0) / 100));
+  if (coupon.Type === 'flat') discount = Number(coupon.Value || 0);
   if (coupon.Type === 'shipping') freeShipping = true;
   discount = Math.min(discount, Number(coupon.MaxDiscount || discount || 0));
 

@@ -1,21 +1,26 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FiCheck, FiTag } from 'react-icons/fi';
+import { contentService } from '../services/contentService.js';
+import { useCart } from '../context/CartContext.jsx';
 
 export default function CouponInput({ onApply }) {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('idle');
+  const { cartTotal } = useCart();
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const normalizedCode = code.trim();
     if (!normalizedCode) return;
-    if (normalizedCode.toUpperCase() === 'LITEPUFF10') {
+    try {
+      const result = await contentService.validateCoupon({ code: normalizedCode, subtotal: cartTotal });
       setStatus('applied');
-      onApply?.(normalizedCode);
-      return;
+      localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
+      onApply?.(result.coupon);
+    } catch {
+      setStatus('invalid');
     }
-    setStatus('invalid');
   }
 
   return (

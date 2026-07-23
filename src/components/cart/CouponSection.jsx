@@ -3,7 +3,7 @@ import { contentService } from '../../services/contentService';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../../context/ToastContext';
 
-export default function CouponSection() {
+export default function CouponSection({ onApplied }) {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { cartTotal } = useCart();
@@ -16,6 +16,7 @@ export default function CouponSection() {
     try {
       const result = await contentService.validateCoupon({ code, subtotal: cartTotal });
       localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
+      onApplied?.(result.coupon);
       showToast(`${result.coupon.code} applied.`);
     } catch (error) {
       showToast(error.response?.data?.message || 'Coupon is not valid.', 'error');

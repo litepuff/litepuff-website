@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { appendRow, batchUpdateRows, deleteRow, getRows, updateRow } from "./googleSheets.js";
 
 const money = (value) => Number(Number(value || 0).toFixed(2));
+const discountMoney = (value) => Math.round(Number(value || 0));
 const intentSecret = () => `${env.jwtSecret}:checkout-intent`;
 
 function httpError(message, status = 400) {
@@ -94,7 +95,9 @@ const successfulOrder = (order) => String(order.PaymentStatus).toLowerCase() ===
 const paymentRemarks = (value) => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
 
 async function firstOrderEligibility(customerId, paymentId) {
-  const orders = await getRows("ORDERS");
+  const [customers, orders] = await Promise.all([getRows("CUSTOMERS"), getRows("ORDERS")]);
+  const customer = customers.find((row) => row.CustomerID === customerId);
+  if (!customer || String(customer.Provider || "").toLowerCase() === "guest") return false;
   if (orders.some((order) => order.CustomerID === customerId && successfulOrder(order))) return false;
   const now = Date.now();
   const payments = await getRows("PAYMENTS");
@@ -108,12 +111,13 @@ async function firstOrderEligibility(customerId, paymentId) {
 export function calculateOrderPricing({ items, couponDiscount = 0, freeShipping = false, firstOrderEligible = false }) {
   const subtotal = money(items.reduce((sum, item) => sum + Number(item.originalPrice) * Number(item.quantity), 0));
   const productDiscount = money(items.reduce((sum, item) => sum + Number(item.productDiscount || 0), 0));
-  const discountedSubtotal = money(subtotal - productDiscount);
-  const firstOrderDiscount = firstOrderEligible ? money(discountedSubtotal * 0.10) : 0;
-  const shipping = freeShipping || discountedSubtotal >= 498 ? 0 : 29;
-  const normalizedCouponDiscount = money(couponDiscount);
+  const sellingSubtotal = money(subtotal - productDiscount);
+  const quantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const firstOrderDiscount = firstOrderEligible ? discountMoney(sellingSubtotal * 0.10) : 0;
+  const shipping = freeShipping || quantity >= 2 ? 0 : quantity === 1 ? 29 : 0;
+  const normalizedCouponDiscount = money(Math.min(sellingSubtotal, Math.max(0, couponDiscount)));
   const discount = money(productDiscount + firstOrderDiscount + normalizedCouponDiscount);
-  return { subtotal, productDiscount, discountedSubtotal, firstOrderDiscount, couponDiscount: normalizedCouponDiscount, shipping, discount, tax: 0, grandTotal: money(Math.max(0, subtotal - discount + shipping)) };
+  return { quantity, subtotal, productDiscount, sellingSubtotal, discountedSubtotal: sellingSubtotal, firstOrderDiscount, couponDiscount: normalizedCouponDiscount, shipping, discount, tax: 0, grandTotal: money(Math.max(0, sellingSubtotal - firstOrderDiscount - normalizedCouponDiscount + shipping)) };
 }
 
 async function priceCoupon(code, subtotal, customerId) {
@@ -148,7 +152,7 @@ async function priceCoupon(code, subtotal, customerId) {
     coupon.Type === "flat"
       ? Number(coupon.Value || 0)
       : coupon.Type === "percent"
-        ? (subtotal * Number(coupon.Value || 0)) / 100
+        ? discountMoney((subtotal * Number(coupon.Value || 0)) / 100)
         : 0;
   discount = money(
     Math.min(discount, Number(coupon.MaxDiscount || discount || 0)),
@@ -167,12 +171,13 @@ export async function buildCheckoutIntent({
   items,
   couponCode,
   paymentId,
+  firstOrderAllowed = false,
 }) {
   const pricedItems = await pricedCart(customerId, items);
   const preliminary = calculateOrderPricing({ items: pricedItems });
   const { discountedSubtotal } = preliminary;
   const coupon = await priceCoupon(couponCode, discountedSubtotal, customerId);
-  const firstOrderEligible = await firstOrderEligibility(customerId, paymentId);
+  const firstOrderEligible = firstOrderAllowed && await firstOrderEligibility(customerId, paymentId);
   const pricing = calculateOrderPricing({ items: pricedItems, couponDiscount: coupon.discount, freeShipping: coupon.freeShipping, firstOrderEligible });
   const snapshot = {
     paymentId,
@@ -182,6 +187,7 @@ export async function buildCheckoutIntent({
     couponCode: coupon.code,
     ...pricing,
     firstOrderEligible,
+    firstOrderAllowed,
     currency: "INR",
   };
   return snapshot;
@@ -252,6 +258,7 @@ async function materializeOrderUnlocked({
         items: snapshot.items,
         couponCode: snapshot.couponCode,
         paymentId: snapshot.paymentId,
+        firstOrderAllowed: snapshot.firstOrderAllowed === true,
       });
   if (
     Number(revalidated.grandTotal) !== Number(payment.Amount) ||

@@ -19,6 +19,7 @@ import { apiMessage, customerService } from "../services/customerService.js";
 import { formatMoney } from "../utils/formatMoney.js";
 import { useToast } from "../context/ToastContext.jsx";
 import { useOrderPricing } from "../hooks/useOrderPricing.js";
+import { contentService } from "../services/contentService.js";
 
 const paymentMethods = [
   {
@@ -45,6 +46,7 @@ const paymentMethods = [
 ];
 
 const deliveryPartners = ["Shiprocket", "Delhivery", "Blue Dart", "DTDC", "India Post"];
+const storedCoupon = () => { try { return JSON.parse(localStorage.getItem('litepuffCoupon') || 'null'); } catch { return null; } };
 
 function loadRazorpay() {
   if (window.Razorpay) return Promise.resolve();
@@ -122,7 +124,9 @@ export default function Checkout() {
     country: "India",
   });
   const [paymentMethod, setPaymentMethod] = useState("upi");
-  const [coupon, setCoupon] = useState("");
+  const initialCoupon = useRef(storedCoupon()).current;
+  const [coupon, setCoupon] = useState(initialCoupon?.code || "");
+  const [appliedCoupon, setAppliedCoupon] = useState(initialCoupon);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -130,7 +134,7 @@ export default function Checkout() {
   const [paymentFailure, setPaymentFailure] = useState(null);
   const checkoutForm = useRef(null);
 
-  const estimatedTotals = useOrderPricing(cartItems);
+  const estimatedTotals = useOrderPricing(cartItems, { couponDiscount: appliedCoupon?.discount, freeShipping: appliedCoupon?.freeShipping });
   const [serverPricing, setServerPricing] = useState(null);
   const totals = serverPricing || estimatedTotals;
 
@@ -143,6 +147,20 @@ export default function Checkout() {
   async function selectWelcomeCoupon() {
     setCoupon("LITEPUFF10");
     try { await navigator.clipboard.writeText("LITEPUFF10"); } catch { /* Copy is optional on non-secure previews. */ }
+  }
+
+  async function applyCoupon() {
+    setServerPricing(null);
+    try {
+      const result = await contentService.validateCoupon({ code: coupon, subtotal: estimatedTotals.sellingSubtotal });
+      setAppliedCoupon(result.coupon);
+      setCoupon(result.coupon.code);
+      localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
+      showToast(`${result.coupon.code} applied.`);
+    } catch (couponError) {
+      setAppliedCoupon(null);
+      showToast(apiMessage(couponError, 'Coupon is not valid.'), 'error');
+    }
   }
 
   async function placeOrder(event) {
@@ -489,8 +507,8 @@ export default function Checkout() {
 
               <section className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-[24px] border border-[#E1D5B8] bg-[#FCF8EE] p-5 shadow-soft">
-                  <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold uppercase tracking-[0.2em] text-[#9A7A18]">Coupon</span>{totals.discount > 0 && <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 rounded-full bg-[#E5F2E9] px-2.5 py-1 text-[10px] font-bold text-[#1F5E3B]"><FiCheckCircle /> Coupon Applied</motion.span>}</div>
-                  <div className="mt-3 flex gap-2"><input aria-label="Coupon code" value={coupon} onChange={(event) => setCoupon(event.target.value.toUpperCase())} placeholder="Enter coupon code" className="h-12 min-w-0 flex-1 rounded-xl border border-[#DDD3BE] bg-white px-4 text-sm outline-none" /><button type="button" onClick={() => setCoupon((value) => value.trim().toUpperCase())} className="h-12 rounded-xl bg-[#1F5E3B] px-5 text-sm font-bold text-white">Apply</button></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold uppercase tracking-[0.2em] text-[#9A7A18]">Coupon</span>{totals.couponDiscount > 0 && <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 rounded-full bg-[#E5F2E9] px-2.5 py-1 text-[10px] font-bold text-[#1F5E3B]"><FiCheckCircle /> Coupon Applied</motion.span>}</div>
+                  <div className="mt-3 flex gap-2"><input aria-label="Coupon code" value={coupon} onChange={(event) => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); setServerPricing(null); }} placeholder="Enter coupon code" className="h-12 min-w-0 flex-1 rounded-xl border border-[#DDD3BE] bg-white px-4 text-sm outline-none" /><button type="button" onClick={applyCoupon} className="h-12 rounded-xl bg-[#1F5E3B] px-5 text-sm font-bold text-white">Apply</button></div>
                   <button type="button" onClick={selectWelcomeCoupon} className="mt-3 flex w-full items-center justify-between rounded-xl border border-dashed border-[#C9A227] bg-white px-3 py-2.5 text-left transition hover:-translate-y-0.5"><span><strong className="block text-xs tracking-[0.08em] text-[#1F5E3B]">LITEPUFF10</strong><span className="text-[11px] text-[#6B726D]">10% OFF · First Order</span></span><span className="text-xs font-bold text-[#1F5E3B]">Copy & apply</span></button>
                 </div>
                 <label className="rounded-[24px] border border-[#ECE7DD] bg-white p-5 shadow-soft">

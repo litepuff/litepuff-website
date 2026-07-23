@@ -13,6 +13,8 @@ export function CartProvider({ children }) {
   function saveCart(nextItems) {
     setCartItems(nextItems);
     localStorage.setItem('everydayMakhanaCart', JSON.stringify(nextItems));
+    localStorage.removeItem('litepuffCoupon');
+    window.dispatchEvent(new CustomEvent('litepuff:coupon', { detail: null }));
   }
 
   function addToCart(product, quantity = 1) {

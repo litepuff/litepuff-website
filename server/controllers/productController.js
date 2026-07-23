@@ -20,6 +20,7 @@ function publicProduct(row, images = []) {
     nutritionPDF: row.NutritionPDF,
     price: number(row.DiscountPrice || row.Price),
     regularPrice: number(row.Price),
+    oldPrice: number(row.Price),
     discountPrice: number(row.DiscountPrice),
     weight: row.Weight,
     stock: number(row.Stock),

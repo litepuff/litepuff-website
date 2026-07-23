@@ -6,9 +6,12 @@ import CartSummary from '../components/cart/CartSummary.jsx';
 import EmptyCart from '../components/cart/EmptyCart.jsx';
 import RecommendedProducts from '../components/cart/RecommendedProducts.jsx';
 import { useCart } from '../context/CartContext.jsx';
+import { useState } from 'react';
 
 export default function Cart() {
-  const { cartItems, cartTotal, updateQuantity } = useCart();
+  const { cartItems, updateQuantity } = useCart();
+  const [coupon, setCoupon] = useState(() => { try { return JSON.parse(localStorage.getItem('litepuffCoupon') || 'null'); } catch { return null; } });
+  const changeQuantity = (id, quantity) => { setCoupon(null); updateQuantity(id, quantity); };
 
   return (
     <>
@@ -29,10 +32,10 @@ export default function Cart() {
             <div className="mt-10 grid items-start gap-6 md:grid-cols-[minmax(0,65fr)_minmax(280px,35fr)] lg:grid-cols-[minmax(0,68fr)_minmax(320px,32fr)] lg:gap-8">
               <div className="space-y-5">
                 <AnimatePresence initial={false}>
-                  {cartItems.map((item) => <CartItem key={item.id} item={item} onUpdateQuantity={updateQuantity} onRemove={(id) => updateQuantity(id, 0)} />)}
+                  {cartItems.map((item) => <CartItem key={item.id} item={item} onUpdateQuantity={changeQuantity} onRemove={(id) => changeQuantity(id, 0)} />)}
                 </AnimatePresence>
               </div>
-              <CartSummary subtotal={cartTotal} items={cartItems} />
+              <CartSummary items={cartItems} coupon={coupon} onCouponApplied={setCoupon} />
             </div>
           ) : (
             <div className="mt-10"><EmptyCart /></div>
