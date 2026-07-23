@@ -15,6 +15,6 @@ export const logger = Object.freeze({ info: (message, context) => write('info', 
 
 export function requestLogger(request, response, next) {
   const started = performance.now();
-  response.on('finish', () => logger.info('api.request', { requestId: request.id, method: request.method, path: request.originalUrl, status: response.statusCode, durationMs: Math.round(performance.now() - started) }));
+  response.on('finish', () => logger.info('api.request', { requestId: request.id, userId: request.auth?.customerId || request.customer?.id, method: request.method, path: request.path, status: response.statusCode, durationMs: Math.round(performance.now() - started) }));
   next();
 }

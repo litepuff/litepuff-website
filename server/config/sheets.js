@@ -32,7 +32,7 @@ export const SHEET_SCHEMAS = Object.freeze({
   NEWSLETTER: ['SubscriberID', 'Email', 'SubscribedAt', 'Status'],
   SETTINGS: ['SettingID', 'Key', 'Value', 'Type', 'UpdatedAt'],
   SHIPMENTS: ['ShipmentID', 'OrderID', 'Provider', 'ProviderShipmentID', 'AWB', 'Courier', 'Cost', 'EstimatedDays', 'LabelURL', 'Status', 'TrackingURL', 'CreatedAt', 'UpdatedAt'],
-  NOTIFICATIONS: ['NotificationID', 'CustomerID', 'OrderID', 'Channel', 'Type', 'Status', 'ProviderID', 'SentAt', 'Error'],
+  NOTIFICATIONS: ['NotificationID', 'CustomerID', 'OrderID', 'Channel', 'Type', 'Status', 'ProviderID', 'SentAt', 'Error', 'Title', 'Message', 'DeepLink', 'IsRead', 'CreatedAt', 'ReadAt', 'Attempts', 'NextAttemptAt', 'Metadata'],
   AUTH_AUDIT: ['AuditID', 'FirebaseUID', 'CustomerID', 'Event', 'IPHash', 'UserAgent', 'CreatedAt', 'ActorID', 'ActorRole', 'Permission', 'Resource', 'Action', 'Decision', 'RequestID', 'Metadata'],
   SESSIONS: ['SessionID', 'CustomerID', 'Role', 'RefreshTokenHash', 'Status', 'CreatedAt', 'LastActivity', 'ExpiresAt', 'UserAgent', 'IPAddress', 'TerminatedAt', 'TerminationReason', 'TrustedAt'],
   OTP_CHALLENGES: ['OTPID', 'CustomerID', 'Identifier', 'Provider', 'OTPHash', 'Purpose', 'CreatedAt', 'ExpiresAt', 'Attempts', 'ResendCount', 'Status', 'LastSentAt', 'LockedUntil', 'VerifiedAt', 'DeliveryStatus', 'ProviderMessageID'],

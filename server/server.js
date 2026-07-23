@@ -33,6 +33,8 @@ import { googleSheetsService } from './services/GoogleSheetsService.js';
 import { googleCredentialProvider } from './config/GoogleCredentialProvider.js';
 import { whatsAppConfig } from './config/WhatsAppConfig.js';
 import { whatsAppHealthService } from './services/WhatsAppHealthService.js';
+import { startShippingRetryWorker } from './services/shippingService.js';
+import { startNotificationRetryWorker } from './services/NotificationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -91,6 +93,7 @@ const app = express();
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+app.use((request, response, next) => { request.id = request.get('x-request-id') || crypto.randomUUID(); response.set('x-request-id', request.id); next(); });
 const allowedOrigins = new Set([env.clientUrl, env.appUrl].filter(Boolean));
 app.use(cors({ origin: (origin, callback) => !origin || allowedOrigins.has(origin) ? callback(null, true) : callback(new AppError('Request origin is not allowed.', { status: 403, code: 'CORS_ORIGIN_REJECTED' })), credentials: true }));
 app.post('/api/payment/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '256kb' }), (request, response, next) => Promise.resolve(paymentWebhook(request, response, next)).catch(next));
@@ -99,7 +102,6 @@ app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser(env.cookieSecret));
 app.use(securityStack);
 app.use(csrfArchitectureGuard);
-app.use((request, response, next) => { request.id = request.get('x-request-id') || crypto.randomUUID(); response.set('x-request-id', request.id); next(); });
 app.use('/api', responseEnvelope);
 app.use(requestLogger);
 app.use('/uploads', express.static(uploadFolder));
@@ -139,13 +141,18 @@ export function startServer(port = env.port) {
   logger.info('startup.http.starting', { port });
   const server = app.listen(port, async () => {
     logger.info('startup.server.started-successfully', { port, environment: env.nodeEnv });
+    startShippingRetryWorker();
+    startNotificationRetryWorker();
     logger.info('startup.google-sheets.initializing');
     const credentialState = googleCredentialProvider.diagnostics();
     logger.info('google.credentials.loaded', { source: credentialState.credentialSource, configured: googleSheetsConfig.credentialsConfigured, clientEmail: credentialState.clientEmail, fingerprint: credentialState.credentialFingerprint });
     try {
       googleCredentialProvider.getAuthClient();
       logger.info('google.jwt.created', { source: credentialState.credentialSource, clientEmail: credentialState.clientEmail });
-      await googleSheetsService.synchronize({ removeUnused: false });
+      // Production startup must never clear and rewrite populated worksheets.
+      // synchronize() is an explicit maintenance operation; schema initialization
+      // only creates missing sheets/headers and is safe to run on every deploy.
+      await googleSheetsService.initializeSchema();
       const diagnostic = await googleSheetsService.diagnose();
       logger.info('google.authenticated', { source: credentialState.credentialSource, clientEmail: credentialState.clientEmail });
       logger.info('google-sheets.startup.connected', { spreadsheet: diagnostic.spreadsheet, worksheetCount: diagnostic.worksheetCount, worksheets: diagnostic.worksheets, missingWorksheets: diagnostic.missingWorksheets });

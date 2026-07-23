@@ -158,7 +158,7 @@ async function finalizePayment({
       "PAYMENTS",
       (row) => row.PaymentID === payment.PaymentID,
     );
-    await notifyPaymentSuccess(order, saved);
+    await notifyPaymentSuccess(order, saved).catch(() => {});
     return { order, payment: saved, replay: false };
   });
 }
@@ -292,6 +292,10 @@ export async function verifyPayment(request, response) {
 }
 
 export async function recordPaymentFailure(request, response) {
+  const snapshot = verifyCheckoutIntent(request.body.checkoutToken);
+  if (snapshot.paymentId !== request.body.paymentId || snapshot.customerId !== request.customer.id) {
+    return response.status(401).json({ success: false, message: "Payment authorization is invalid." });
+  }
   const payment = await findRow(
     "PAYMENTS",
     (row) =>

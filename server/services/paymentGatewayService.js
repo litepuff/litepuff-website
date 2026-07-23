@@ -17,8 +17,22 @@ function gateway() {
   return new Razorpay({ key_id: env.razorpayKeyId, key_secret: env.razorpayKeySecret });
 }
 
+async function withGatewayTimeout(operation) {
+  let timer;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error('Razorpay request timed out.'), { status: 503, code: 'RAZORPAY_TIMEOUT', expose: true })), 15_000);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function createRazorpayOrder({ receipt, amount, currency = 'INR', notes = {} }) {
-  return gateway().orders.create({ amount: Math.round(Number(amount) * 100), currency, receipt, notes });
+  return withGatewayTimeout(gateway().orders.create({ amount: Math.round(Number(amount) * 100), currency, receipt, notes }));
 }
 
 function safeHmacEqual(expected, received) {
@@ -38,7 +52,7 @@ export function verifyWebhookSignature(rawBody, signature) {
 }
 
 export async function fetchRazorpayPayment(paymentId) {
-  return gateway().payments.fetch(paymentId);
+  return withGatewayTimeout(gateway().payments.fetch(paymentId));
 }
 
 export function publicGatewayConfig() {

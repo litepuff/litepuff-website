@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
-import { appendRow, deleteRow, getRows, updateRow } from "./googleSheets.js";
+import { appendRow, batchUpdateRows, deleteRow, getRows, updateRow } from "./googleSheets.js";
 
 const money = (value) => Number(Number(value || 0).toFixed(2));
 const intentSecret = () => `${env.jwtSecret}:checkout-intent`;
@@ -312,6 +312,8 @@ async function materializeOrderUnlocked({
   }
   const products = await getRows("PRODUCTS");
   const existingItems = await getRows("ORDER_ITEMS");
+  const createdItems = [];
+  const inventoryUpdates = [];
   for (const [index, item] of revalidated.items.entries()) {
     const orderItemId = `item-${payment.PaymentID}-${index + 1}`;
     if (existingItems.some((row) => row.OrderItemID === orderItemId)) continue;
@@ -324,9 +326,20 @@ async function materializeOrderUnlocked({
       Quantity: item.quantity,
       Total: item.total,
     });
+    createdItems.push(orderItemId);
     const product = products.find((row) => row.ProductID === item.productId);
+    if (!product || Number(product.Stock) < item.quantity) throw httpError("Inventory changed while confirming this order.", 409);
     product.Stock = Number(product.Stock) - item.quantity;
-    await updateRow("PRODUCTS", product._row, product);
+    inventoryUpdates.push({ rowNumber: product._row, record: product });
+  }
+  try {
+    await batchUpdateRows("PRODUCTS", inventoryUpdates);
+  } catch (error) {
+    // Compensate item rows when inventory could not be committed. This keeps a
+    // retry from treating an unadjusted item as already materialized.
+    const rows = (await getRows("ORDER_ITEMS")).filter((row) => createdItems.includes(row.OrderItemID)).sort((a, b) => b._row - a._row);
+    await Promise.allSettled(rows.map((row) => deleteRow("ORDER_ITEMS", row._row)));
+    throw error;
   }
   const paymentNotes = (() => {
     try {
@@ -339,8 +352,10 @@ async function materializeOrderUnlocked({
     const coupon = (await getRows("COUPONS")).find(
       (row) => row.Code === revalidated.couponCode,
     );
-    coupon.UsedCount = Number(coupon.UsedCount || 0) + 1;
-    await updateRow("COUPONS", coupon._row, coupon);
+    if (coupon) {
+      coupon.UsedCount = Number(coupon.UsedCount || 0) + 1;
+      await updateRow("COUPONS", coupon._row, coupon);
+    }
     paymentNotes.couponApplied = true;
     payment.Remarks = JSON.stringify(paymentNotes);
     await updateRow("PAYMENTS", payment._row, payment);
@@ -363,7 +378,7 @@ async function materializeOrderUnlocked({
       EstimatedDeliveryDate: order.EstimatedDelivery,
     });
   const cartRows = (await getRows("CART"))
-    .filter((row) => row.CustomerID === snapshot.customerId)
+    .filter((row) => row.CustomerID === snapshot.customerId && snapshot.items.some((item) => item.productId === row.ProductID))
     .sort((a, b) => b._row - a._row);
   for (const row of cartRows) await deleteRow("CART", row._row);
 

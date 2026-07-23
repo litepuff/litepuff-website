@@ -4,6 +4,7 @@ import { protectCustomerRoute, requirePermission } from '../middleware/authMiddl
 import { authLimiter } from '../middleware/securityMiddleware.js';
 import { PERMISSIONS } from '../config/auth.js';
 import { auditEvent } from '../services/activityLogService.js';
+import { listNotifications, readAllNotifications, readNotification } from '../controllers/notificationController.js';
 
 const router = express.Router();
 const handle = (controller) => (request, response, next) => Promise.resolve(controller(request, response, next)).catch(next);
@@ -15,6 +16,9 @@ router.post('/change-email', authLimiter, requirePermission(PERMISSIONS.CUSTOMER
 router.post('/change-phone', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_IDENTITY_MANAGE), auditEvent('customer.phone.changed', 'customer.identity'), handle(changePhone));
 router.post('/delete', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_DELETE), auditEvent('customer.account.deleted', 'customer.account'), handle(deleteAccount));
 router.get('/sessions', requirePermission(PERMISSIONS.CUSTOMER_SESSIONS_MANAGE), handle(listSessions));
+router.get('/notifications', requirePermission(PERMISSIONS.CUSTOMER_PROFILE_READ), handle(listNotifications));
+router.put('/notifications/read-all', requirePermission(PERMISSIONS.CUSTOMER_PROFILE_UPDATE), handle(readAllNotifications));
+router.put('/notifications/:id/read', requirePermission(PERMISSIONS.CUSTOMER_PROFILE_UPDATE), handle(readNotification));
 router.post('/logout-device', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_SESSIONS_MANAGE), auditEvent('session.terminated', 'customer.sessions'), handle(logoutDevice));
 router.post('/logout-all', authLimiter, requirePermission(PERMISSIONS.CUSTOMER_SESSIONS_MANAGE), auditEvent('session.all_terminated', 'customer.sessions'), handle(logoutAllDevices));
 export default router;

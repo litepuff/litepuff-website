@@ -6,9 +6,10 @@ import { notificationService } from './NotificationService.js';
 
 export async function notifyPaymentSuccess(order, payment) {
   const customer = (await getRows('CUSTOMERS')).find((row) => row.CustomerID === order.CustomerID);
-  const invoice = await generateInvoice(order.OrderID);
+  const invoice = await generateInvoice(order.OrderID).catch(() => null);
   const tasks = [];
-  if (customer?.Email) tasks.push(notificationService.sendEmail({ to: customer.Email, template: emailTemplates.paymentSuccessful(order, payment), attachments: [{ filename: invoice.fileName, path: invoice.filePath }], customerId: order.CustomerID, orderId: order.OrderID, type: 'payment_success' }));
+  tasks.push(notificationService.createWebsite({ customerId: order.CustomerID, orderId: order.OrderID, type: 'payment_success', title: 'Payment Successful', message: `Payment received for order ${order.OrderNumber}.`, deepLink: `/account/orders/${order.OrderID}` }));
+  if (customer?.Email) tasks.push(notificationService.sendEmail({ to: customer.Email, template: emailTemplates.paymentSuccessful(order, payment), attachments: invoice ? [{ filename: invoice.fileName, path: invoice.filePath }] : [], customerId: order.CustomerID, orderId: order.OrderID, type: 'payment_success' }));
   if (env.adminNotifyEmail) tasks.push(notificationService.sendEmail({ to: env.adminNotifyEmail, template: emailTemplates.adminNewOrder(order), orderId: order.OrderID, type: 'admin_new_order' }));
   await Promise.allSettled(tasks);
   return invoice;
@@ -16,6 +17,7 @@ export async function notifyPaymentSuccess(order, payment) {
 
 export async function notifyPaymentFailure(payment) {
   const customer = (await getRows('CUSTOMERS')).find((row) => row.CustomerID === payment.CustomerID);
-  if (!customer?.Email) return { skipped: true };
-  return notificationService.sendEmail({ to: customer.Email, template: emailTemplates.paymentFailed(payment), customerId: payment.CustomerID, orderId: payment.OrderID, type: 'payment_failed' });
+  const tasks = [notificationService.createWebsite({ customerId: payment.CustomerID, orderId: payment.OrderID, type: 'payment_failed', title: 'Payment Failed', message: 'Your payment did not complete. Your cart is unchanged.', deepLink: '/checkout' })];
+  if (customer?.Email) tasks.push(notificationService.sendEmail({ to: customer.Email, template: emailTemplates.paymentFailed(payment), customerId: payment.CustomerID, orderId: payment.OrderID, type: 'payment_failed' }));
+  return Promise.allSettled(tasks);
 }

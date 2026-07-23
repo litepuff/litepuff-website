@@ -1,12 +1,27 @@
 import { env } from '../config/env.js';
 import { appendRow, getRows, updateRow } from './googleSheets.js';
 import { createId } from '../utils/createId.js';
+import { logger } from '../utils/logger.js';
 
-const requestJson = async (url, options = {}) => {
-  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15_000) });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(payload.message || payload.error || 'Shipping provider request failed.'), { status: 502 });
-  return payload;
+const requestJson = async (url, options = {}, attempt = 0) => {
+  try {
+    const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15_000) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, (500 * (2 ** attempt)) + Math.floor(Math.random() * 200)));
+        return requestJson(url, options, attempt + 1);
+      }
+      throw Object.assign(new Error(payload.message || payload.error || 'Shipping provider request failed.'), { status: 502, providerStatus: response.status });
+    }
+    return payload;
+  } catch (error) {
+    if (attempt < 2 && ['TimeoutError', 'TypeError'].includes(error.name)) {
+      await new Promise((resolve) => setTimeout(resolve, (500 * (2 ** attempt)) + Math.floor(Math.random() * 200)));
+      return requestJson(url, options, attempt + 1);
+    }
+    throw error;
+  }
 };
 
 class ShiprocketProvider {
@@ -65,8 +80,21 @@ export async function chooseCourier(input) {
 }
 
 export async function createShipment(order, preferredProvider) {
+  const existing = (await getRows('SHIPMENTS')).find((row) => row.OrderID === order.OrderID);
+  if (existing && existing.AWB && !['Failed', 'Retry Pending'].includes(existing.Status)) return existing;
   const input = { originPincode: env.shippingOriginPincode, destinationPincode: order.Pincode || order.shippingAddress?.pincode, weight: order.weight || env.shippingWeightKg, cod: order.PaymentMethod === 'Cash on Delivery' };
-  const quote = preferredProvider ? await shippingProviders[preferredProvider].quote(input) : await chooseCourier(input);
+  let quote;
+  try {
+    const selected = preferredProvider && shippingProviders[preferredProvider];
+    if (preferredProvider && !selected?.configured()) throw Object.assign(new Error('Selected shipping provider is not configured.'), { status: 503 });
+    quote = selected ? await selected.quote(input) : await chooseCourier(input);
+  } catch (error) {
+    const failedAt = new Date().toISOString();
+    const pending = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: preferredProvider || '', ProviderShipmentID: '', AWB: '', Courier: '', Cost: '', EstimatedDays: '', LabelURL: '', Status: 'Retry Pending', TrackingURL: '', CreatedAt: existing?.CreatedAt || failedAt, UpdatedAt: failedAt };
+    if (existing) await updateRow('SHIPMENTS', existing._row, pending).catch(() => {});
+    else await appendRow('SHIPMENTS', pending).catch(() => {});
+    throw Object.assign(error, { code: 'SHIPMENT_RETRY_PENDING' });
+  }
   const fallbacks = [shippingProviders[quote.provider], ...Object.values(shippingProviders).filter((provider) => provider.name !== quote.provider && provider.configured())];
   let lastError;
   for (const provider of fallbacks) {
@@ -74,14 +102,19 @@ export async function createShipment(order, preferredProvider) {
       const selectedQuote = provider.name === quote.provider ? quote : await provider.quote(input);
       const result = await provider.create(order, selectedQuote);
       const now = new Date().toISOString();
-      const record = { ShipmentID: createId('shipment'), OrderID: order.OrderID, Provider: provider.name, ProviderShipmentID: result.providerShipmentId, AWB: result.awb, Courier: result.courier, Cost: selectedQuote.cost, EstimatedDays: selectedQuote.estimatedDays, LabelURL: '', Status: result.status, TrackingURL: '', CreatedAt: now, UpdatedAt: now };
-      await appendRow('SHIPMENTS', record);
+      const record = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: provider.name, ProviderShipmentID: result.providerShipmentId, AWB: result.awb, Courier: result.courier, Cost: selectedQuote.cost, EstimatedDays: selectedQuote.estimatedDays, LabelURL: '', Status: result.status, TrackingURL: '', CreatedAt: existing?.CreatedAt || now, UpdatedAt: now };
+      if (existing) await updateRow('SHIPMENTS', existing._row, record);
+      else await appendRow('SHIPMENTS', record);
       if (order._row) await updateRow('ORDERS', order._row, { ...order, TrackingNumber: result.awb, OrderStatus: 'Shipped', UpdatedAt: now });
       await appendRow('ORDER_TRACKING', { TrackingID: createId('tracking'), OrderID: order.OrderID, CurrentStatus: 'Shipped', UpdatedBy: provider.name, Remarks: `${result.courier} · ${result.awb}`, UpdatedAt: now, EstimatedDeliveryDate: order.EstimatedDelivery });
       return record;
     } catch (error) { lastError = error; }
   }
-  throw lastError;
+  const failedAt = new Date().toISOString();
+  const pending = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: preferredProvider || '', ProviderShipmentID: '', AWB: '', Courier: '', Cost: '', EstimatedDays: '', LabelURL: '', Status: 'Retry Pending', TrackingURL: '', CreatedAt: existing?.CreatedAt || failedAt, UpdatedAt: failedAt };
+  if (existing) await updateRow('SHIPMENTS', existing._row, pending).catch(() => {});
+  else await appendRow('SHIPMENTS', pending).catch(() => {});
+  throw Object.assign(lastError || new Error('Shipment creation is pending retry.'), { status: 503, code: 'SHIPMENT_RETRY_PENDING' });
 }
 
 export async function fetchLiveTracking(orderId, customerId) {
@@ -108,3 +141,40 @@ export async function cancelShipment(orderId) {
 
 const orderToShiprocket = (order) => ({ order_id: order.OrderNumber, order_date: order.CreatedAt, pickup_location: env.shiprocketPickupLocation, billing_customer_name: order.shippingAddress?.name, billing_address: order.shippingAddress?.addressLine, billing_city: order.shippingAddress?.city, billing_pincode: order.shippingAddress?.pincode, billing_state: order.shippingAddress?.state, billing_country: 'India', billing_email: order.email || '', billing_phone: order.shippingAddress?.phone, shipping_is_billing: true, order_items: (order.items || []).map((item) => ({ name: item.name || item.ProductName, sku: item.id || item.ProductID, units: item.quantity || item.Quantity, selling_price: item.price || item.Price })), payment_method: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid', sub_total: Number(order.GrandTotal), length: 20, breadth: 15, height: 10, weight: order.weight || env.shippingWeightKg });
 const orderToDelhivery = (order) => ({ name: order.shippingAddress?.name, add: order.shippingAddress?.addressLine, pin: order.shippingAddress?.pincode, city: order.shippingAddress?.city, state: order.shippingAddress?.state, country: 'India', phone: order.shippingAddress?.phone, order: order.OrderNumber, payment_mode: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid', total_amount: order.GrandTotal, products_desc: (order.items || []).map((item) => item.name || item.ProductName).join(', '), weight: Math.round((order.weight || env.shippingWeightKg) * 1000) });
+
+let retryTimer;
+let retryRunning = false;
+
+export async function retryPendingShipments() {
+  if (retryRunning) return;
+  retryRunning = true;
+  try {
+    const pending = (await getRows('SHIPMENTS'))
+      .filter((row) => row.Status === 'Retry Pending')
+      .sort((a, b) => String(a.UpdatedAt).localeCompare(String(b.UpdatedAt)))
+      .slice(0, 5);
+    if (!pending.length) return;
+    const [orders, addresses, items] = await Promise.all([getRows('ORDERS'), getRows('ADDRESSES'), getRows('ORDER_ITEMS')]);
+    for (const shipment of pending) {
+      const order = orders.find((row) => row.OrderID === shipment.OrderID);
+      if (!order) continue;
+      const address = addresses.find((row) => row.AddressID === order.AddressID);
+      const enriched = {
+        ...order,
+        shippingAddress: address ? { name: address.FullName, phone: address.Phone, addressLine: [address.AddressLine1, address.AddressLine2, address.Landmark].filter(Boolean).join(', '), city: address.City, state: address.State, pincode: address.Pincode } : undefined,
+        items: items.filter((row) => row.OrderID === order.OrderID)
+      };
+      await createShipment(enriched, shipment.Provider || undefined).catch((error) => logger.warn('shipping.retry.deferred', { orderId: order.OrderID, shipmentId: shipment.ShipmentID, code: error.code || 'SHIPPING_PROVIDER_FAILED' }));
+    }
+  } finally {
+    retryRunning = false;
+  }
+}
+
+export function startShippingRetryWorker() {
+  if (retryTimer) return retryTimer;
+  const interval = Math.max(60_000, Number(process.env.SHIPPING_RETRY_INTERVAL_MS || 300_000));
+  retryTimer = setInterval(() => retryPendingShipments().catch((error) => logger.warn('shipping.retry-worker.failed', { code: error.code || 'SHIPPING_RETRY_WORKER_FAILED' })), interval);
+  retryTimer.unref?.();
+  return retryTimer;
+}

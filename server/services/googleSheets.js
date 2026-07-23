@@ -10,8 +10,10 @@ let initialization;
 let metadataCache;
 let metadataExpiresAt = 0;
 const rowCache = new Map();
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = Number(process.env.GOOGLE_SHEETS_CACHE_TTL_MS || 60_000);
 const MAX_RETRIES = 5;
+const inFlightReads = new Map();
+let mutationQueue = Promise.resolve();
 const DEPENDENTS = SHEET_DEPENDENCIES;
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
@@ -51,7 +53,7 @@ async function request(path, options = {}, attempt = 0) {
   } catch (cause) {
     if (cause instanceof AppError && cause.code !== 'GOOGLE_TOKEN_NETWORK_ERROR') throw cause;
     if (attempt < MAX_RETRIES) {
-      await new Promise((resolve) => setTimeout(resolve, 1_000 * (2 ** attempt)));
+      await new Promise((resolve) => setTimeout(resolve, (1_000 * (2 ** attempt)) + Math.floor(Math.random() * 250)));
       return request(path, options, attempt + 1);
     }
     if (cause instanceof AppError) throw cause;
@@ -63,7 +65,7 @@ async function request(path, options = {}, attempt = 0) {
   if (!response.ok) {
     if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
       const retryAfter = Number(response.headers.get('retry-after') || 0) * 1_000;
-      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfter, 1_000 * (2 ** attempt))));
+      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfter, (1_000 * (2 ** attempt)) + Math.floor(Math.random() * 250))));
       return request(path, options, attempt + 1);
     }
     const permissionHint = response.status === 403 ? ` Share the spreadsheet with ${googleSheetsConfig.serviceAccountEmail} as Editor and ensure the Google Sheets API is enabled.` : '';
@@ -154,8 +156,13 @@ async function validateRecord(sheetName, record, rowNumber) {
 }
 
 async function rawValues(range) {
-  const payload = await request(`/values/${encodeURIComponent(range)}`);
-  return payload.values || [];
+  const key = String(range);
+  if (inFlightReads.has(key)) return inFlightReads.get(key);
+  const operation = request(`/values/${encodeURIComponent(range)}`)
+    .then((payload) => payload.values || [])
+    .finally(() => inFlightReads.delete(key));
+  inFlightReads.set(key, operation);
+  return operation;
 }
 
 async function batchRawValues(ranges) {
@@ -310,6 +317,12 @@ export async function diagnoseGoogleSheetsConnection() {
   return { connected: true, spreadsheet: title, worksheetCount: worksheets.length, worksheets, missingWorksheets, scope: GOOGLE_SCOPE };
 }
 
+function serializeMutation(task) {
+  const operation = mutationQueue.catch(() => {}).then(task);
+  mutationQueue = operation.catch(() => {});
+  return operation;
+}
+
 export function resetGoogleSheetsConnection() {
   googleCredentialProvider.authClient = null;
   initialization = undefined;
@@ -377,21 +390,37 @@ export async function appendRow(sheetName, record) {
   if (!SHEETS[sheetName]) throw new Error(`Unknown Google Sheet: ${sheetName}`);
   await syncGoogleSheetsSchema();
   await validateRecord(sheetName, record);
-  const result = await request(`/values/${encodeURIComponent(`${sheetName}!A:A`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
-    method: 'POST',
-    body: JSON.stringify({ values: [SHEETS[sheetName].map((header) => record[header] ?? '')] })
+  return serializeMutation(async () => {
+    await validateRecord(sheetName, record);
+    // Recheck inside the write queue so concurrent identical primary-key appends
+    // become an idempotent replay instead of duplicate rows.
+    const primaryKey = SHEET_RULES[sheetName]?.primaryKey;
+    if (primaryKey && comparable(record[primaryKey])) {
+      const existing = (await getRows(sheetName)).find((row) => comparable(row[primaryKey]) === comparable(record[primaryKey]));
+      if (existing) return { deduplicated: true, existingRow: existing._row };
+    }
+    const result = await request(`/values/${encodeURIComponent(`${sheetName}!A:A`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+      method: 'POST',
+      body: JSON.stringify({ values: [SHEETS[sheetName].map((header) => record[header] ?? '')] })
+    });
+    cacheAppend(sheetName, record, result?.updates?.updatedRange);
+    return result;
   });
-  cacheAppend(sheetName, record, result?.updates?.updatedRange);
-  return result;
 }
 
 export async function updateRow(sheetName, rowNumber, record) {
   if (!SHEETS[sheetName]) throw new Error(`Unknown Google Sheet: ${sheetName}`);
   await syncGoogleSheetsSchema();
   await validateRecord(sheetName, record, Number(rowNumber));
-  const result = await writeValues(`${sheetName}!A${rowNumber}`, [SHEETS[sheetName].map((header) => record[header] ?? '')]);
-  cacheUpdate(sheetName, rowNumber, record);
-  return result;
+  return serializeMutation(async () => {
+    await validateRecord(sheetName, record, Number(rowNumber));
+    const existing = (await getRows(sheetName)).find((row) => row._row === Number(rowNumber));
+    const unchanged = existing && SHEETS[sheetName].every((header) => String(existing[header] ?? '') === String(record[header] ?? ''));
+    if (unchanged) return { deduplicated: true, unchanged: true };
+    const result = await writeValues(`${sheetName}!A${rowNumber}`, [SHEETS[sheetName].map((header) => record[header] ?? '')]);
+    cacheUpdate(sheetName, rowNumber, record);
+    return result;
+  });
 }
 
 export async function batchUpdateRows(sheetName, updates) {
@@ -400,9 +429,18 @@ export async function batchUpdateRows(sheetName, updates) {
   await syncGoogleSheetsSchema();
   for (const update of updates) await validateRecord(sheetName, update.record, Number(update.rowNumber));
   const data = updates.map(({ rowNumber, record }) => ({ range: `${sheetName}!A${rowNumber}`, values: [SHEETS[sheetName].map((header) => record[header] ?? '')] }));
-  const result = await request('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data }) });
-  updates.forEach(({ rowNumber, record }) => cacheUpdate(sheetName, rowNumber, record));
-  return result;
+  return serializeMutation(async () => {
+    const current = await getRows(sheetName);
+    const changed = updates.filter(({ rowNumber, record }) => {
+      const existing = current.find((row) => row._row === Number(rowNumber));
+      return !existing || SHEETS[sheetName].some((header) => String(existing[header] ?? '') !== String(record[header] ?? ''));
+    });
+    if (!changed.length) return { totalUpdatedRows: 0, deduplicated: true };
+    const changedData = changed.map(({ rowNumber, record }) => ({ range: `${sheetName}!A${rowNumber}`, values: [SHEETS[sheetName].map((header) => record[header] ?? '')] }));
+    const result = await request('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: changedData }) });
+    changed.forEach(({ rowNumber, record }) => cacheUpdate(sheetName, rowNumber, record));
+    return result;
+  });
 }
 
 export async function deleteRow(sheetName, rowNumber) {
