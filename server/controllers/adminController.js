@@ -107,7 +107,6 @@ const orderDto = (row, customer = null, items = [], payment = null) => ({
   items,
   subtotal: Number(row.Subtotal || 0),
   productDiscount: Number(row.ProductDiscount || 0),
-  firstOrderDiscount: Number(row.FirstOrderDiscount || 0),
   couponDiscount: Number(row.CouponDiscount || 0),
   shipping: Number(row.Shipping || 0),
   discount: Number(row.Discount || 0),

@@ -59,13 +59,13 @@ export async function subscribeNewsletter(request, response) {
   created(response, { subscriberId: row.SubscriberID }, 'Subscribed successfully.');
 }
 
-export async function validateCoupon(request, response) {
+async function validateLegacyCoupon(request, response) {
   const code = String(request.body.code || '').trim().toUpperCase();
   const subtotal = Number(request.body.subtotal || 0);
   if (!code) return response.status(400).json({ success: false, message: 'Coupon code is required.' });
   const [coupons, orders] = await Promise.all([getRows('COUPONS'), getRows('ORDERS')]);
   const coupon = coupons.find((item) => String(item.Code).trim().toUpperCase() === code);
-  if (!coupon || String(coupon.Status).toLowerCase() !== 'active') return response.status(404).json({ success: false, message: 'Coupon is not valid.' });
+  if (!coupon || String(coupon.Status).toLowerCase() !== 'active') return response.status(404).json({ success: false, message: 'Invalid coupon code.' });
   if (coupon.Expiry && new Date(coupon.Expiry) < new Date()) return response.status(410).json({ success: false, message: 'Coupon has expired.' });
   if (Number(coupon.MinOrder || 0) > subtotal) return response.status(400).json({ success: false, message: `Minimum order value is ₹${coupon.MinOrder}.` });
   if (Number(coupon.UsageLimit || 0) && Number(coupon.UsedCount || 0) >= Number(coupon.UsageLimit)) return response.status(409).json({ success: false, message: 'Coupon usage limit reached.' });
@@ -74,10 +74,10 @@ export async function validateCoupon(request, response) {
     String(order.CouponCode || '').trim().toUpperCase() === code &&
     !['cancelled', 'failed'].includes(String(order.OrderStatus).toLowerCase())
   );
-  const firstOrderCoupon = ['LITEPUFF10', 'PUFFFIRST'].includes(code);
-  if (alreadyUsed) return response.status(409).json({ success: false, message: firstOrderCoupon ? "You're not eligible for the First Order Offer because it has already been used. Your Product Discount is still applied." : 'This coupon has already been used by your account. Your Product Discount is still applied.' });
+  const restrictedCoupon = code === 'LITEPUFF20';
+  if (alreadyUsed) return response.status(409).json({ success: false, message: 'This coupon has already been used on your account.' });
   const hasCompletedOrder = orders.some((order) => order.CustomerID === request.customer.id && (String(order.PaymentStatus).toLowerCase() === 'paid' || ['completed', 'delivered'].includes(String(order.OrderStatus).toLowerCase())));
-  if (firstOrderCoupon && hasCompletedOrder) return response.status(409).json({ success: false, message: "You're not eligible for the First Order Offer because it has already been used. Your Product Discount is still applied." });
+  if (restrictedCoupon && hasCompletedOrder) return response.status(409).json({ success: false, message: 'This coupon is unavailable.' });
 
   let discount = 0;
   let freeShipping = false;
@@ -86,5 +86,19 @@ export async function validateCoupon(request, response) {
   if (coupon.Type === 'shipping') freeShipping = true;
   discount = Math.min(discount, Number(coupon.MaxDiscount || discount || 0));
 
-  ok(response, { coupon: { code, type: coupon.Type, discount: Number(discount.toFixed(2)), freeShipping, firstOrder: firstOrderCoupon } }, firstOrderCoupon ? 'Coupon Applied Successfully. Your automatic First Order Discount is confirmed.' : 'Coupon Applied Successfully.');
+  ok(response, { coupon: { code, type: coupon.Type, discount: Number(discount.toFixed(2)), freeShipping } }, 'Coupon applied successfully.');
+}
+
+export async function validateCoupon(request, response) {
+  const code = String(request.body.code || '').trim().toUpperCase();
+  const subtotal = Number(request.body.subtotal || 0);
+  const paymentMethod = String(request.body.paymentMethod || 'online').toLowerCase();
+  if (!code) return response.status(400).json({ success: false, message: 'Coupon code is required.' });
+  if (paymentMethod === 'cod') return response.status(409).json({ success: false, message: 'Coupon available only for Online Payments.' });
+  if (code !== 'LITEPUFF20') return response.status(404).json({ success: false, message: 'Invalid Coupon Code.' });
+  const coupon = (await getRows('COUPONS')).find((item) => String(item.Code || '').trim().toUpperCase() === code);
+  if (coupon && String(coupon.Status || 'active').toLowerCase() !== 'active') return response.status(404).json({ success: false, message: 'Invalid Coupon Code.' });
+  if (coupon?.Expiry && new Date(coupon.Expiry) < new Date()) return response.status(410).json({ success: false, message: 'Offer Expired.' });
+  const discount = Math.round(subtotal * 0.20);
+  ok(response, { coupon: { code, type: 'percent', value: 20, discount, freeShipping: false } }, 'Coupon Applied Successfully.');
 }

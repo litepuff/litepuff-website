@@ -78,7 +78,7 @@ export async function generateInvoice(orderId) {
       doc.fillColor('#53635c').fontSize(10).text(`${item.ProductName}  x ${item.Quantity}`, { continued: true }).text(rupee(item.Total), { align: 'right' });
     });
     doc.moveDown();
-    [['Subtotal', order.Subtotal], ['Product Discount', -Number(order.ProductDiscount || 0)], ...(Number(order.FirstOrderDiscount || 0) ? [['First Order Discount (10%)', -Number(order.FirstOrderDiscount)]] : []), ...(Number(order.CouponDiscount || 0) ? [[`Coupon${order.CouponCode ? ` (${order.CouponCode})` : ''}`, -Number(order.CouponDiscount)]] : []), ['Shipping', order.Shipping], ['Tax (included)', order.Tax], ['Grand Total', order.GrandTotal]].forEach(([label, value]) => {
+    [['MRP', order.Subtotal], ...(Number(order.CouponDiscount || 0) ? [['Coupon Discount', -Number(order.CouponDiscount)]] : []), [String(order.PaymentMethod || '').toLowerCase().includes('cash') ? 'Shipping Included' : 'Shipping', order.Shipping], ['Tax Included', order.Tax], ['Grand Total', order.GrandTotal]].forEach(([label, value]) => {
       doc.fillColor(label === 'Grand Total' ? '#1E4D3A' : '#53635c').fontSize(label === 'Grand Total' ? 13 : 10).text(label, { continued: true }).text(rupee(value), { align: 'right' });
     });
     doc.moveDown();

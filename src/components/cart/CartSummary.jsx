@@ -14,22 +14,18 @@ function Row({ label, children }) {
 
 export default function CartSummary({ items = [], coupon = null, onCouponApplied }) {
   const navigate = useNavigate();
-  const pricing = useOrderPricing(items, { couponDiscount: coupon?.discount, freeShipping: coupon?.freeShipping, firstOrderCoupon: coupon?.firstOrder });
+  const pricing = useOrderPricing(items, { couponCode: coupon?.code, couponDiscount: coupon?.discount, paymentMethod: 'online' });
   return (
     <aside className="rounded-[28px] border border-[#ECE7DD] bg-white p-6 shadow-[0_14px_42px_rgba(36,48,41,0.055)] md:sticky md:top-[120px] lg:p-8">
       <h2 className="font-display text-[34px] font-semibold leading-none tracking-[-0.03em] text-[#243029]">Order Summary</h2>
       <div className="mt-5 space-y-2.5">
         <Row label="Subtotal"><strong className="text-[#243029]">{formatMoney(pricing.subtotal)}</strong></Row>
-        {pricing.productDiscount > 0 && <Row label="Product Discount"><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.productDiscount)}</span></Row>}
-        <Row label="Selling Price Total"><strong className="text-[#243029]">{formatMoney(pricing.sellingSubtotal)}</strong></Row>
-        {pricing.firstOrderDiscount > 0 && <Row label={`First Order Discount${coupon?.firstOrder ? ` (${coupon.code})` : ' (Automatic)'}`}><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.firstOrderDiscount)}</span></Row>}
-        {pricing.couponDiscount > 0 && <Row label={`Coupon${coupon?.code ? ` (${coupon.code})` : ''}`}><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.couponDiscount)}</span></Row>}
+        {pricing.couponDiscount > 0 && <Row label="Coupon Discount"><span className="font-semibold text-[#1E4D3A]">-{formatMoney(pricing.couponDiscount)}</span></Row>}
         <Row label="Shipping"><span className="font-semibold text-[#1E4D3A]">{pricing.shipping === 0 ? 'FREE' : formatMoney(pricing.shipping)}</span></Row>
         <Row label="Tax">Included</Row>
       </div>
       <div className="mt-4 border-t border-[#ECE7DD] pt-4">
         <div className="flex items-end justify-between gap-4"><span className="font-semibold text-[#243029]">Grand Total</span><strong className="font-display text-[30px] font-semibold leading-none text-[#243029]">{formatMoney(pricing.grandTotal)}</strong></div>
-        {pricing.firstOrderDiscount > 0 && <p className="mt-2 text-right text-[11px] font-semibold text-[#1E4D3A]">✓ First Order Discount Applied</p>}
       </div>
       <div className="mt-5"><ShippingProgress quantity={pricing.quantity} /></div>
       <div className="mt-4"><CouponSection onApplied={onCouponApplied} /></div>

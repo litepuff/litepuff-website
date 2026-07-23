@@ -171,7 +171,7 @@ async function createPaymentOrderUnlocked(request, response) {
     items: request.body.items,
     couponCode: request.body.couponCode || request.body.coupon,
     paymentId,
-    firstOrderAllowed: Boolean(request.auth),
+    paymentMethod: "online",
   });
   const gatewayOrder = await createRazorpayOrder({
     receipt: paymentId,
@@ -197,9 +197,8 @@ async function createPaymentOrderUnlocked(request, response) {
     Gateway: gateway.gateway,
     Remarks: encodeRemarks({
       checkoutToken,
-      firstOrderReserved: snapshot.firstOrderEligible,
       checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-      pricing: { subtotal: snapshot.subtotal, sellingSubtotal: snapshot.sellingSubtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal },
+      pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod },
       message: "Payment checkout created.",
     }),
   });
@@ -214,7 +213,7 @@ async function createPaymentOrderUnlocked(request, response) {
       keyId: gateway.keyId,
       mode: gateway.mode,
       checkoutToken,
-      pricing: { subtotal: snapshot.subtotal, sellingSubtotal: snapshot.sellingSubtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, discount: snapshot.discount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal, firstOrderEligible: snapshot.firstOrderEligible },
+      pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, discount: snapshot.discount, shipping: snapshot.shipping, shippingIncluded: snapshot.shippingIncluded, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod, offerStatus: snapshot.offerStatus },
     },
     "Secure payment prepared.",
   );
@@ -230,7 +229,7 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
     items: request.body.items,
     couponCode: request.body.couponCode || request.body.coupon,
     paymentId,
-    firstOrderAllowed: Boolean(request.auth),
+    paymentMethod: "cod",
   });
   await appendRow("PAYMENTS", {
     PaymentID: paymentId,
@@ -246,7 +245,7 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
     PaidAt: "",
     TransactionReference: paymentId,
     Gateway: "Cash on Delivery",
-    Remarks: encodeRemarks({ firstOrderReserved: snapshot.firstOrderEligible, checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(), pricing: { subtotal: snapshot.subtotal, sellingSubtotal: snapshot.sellingSubtotal, productDiscount: snapshot.productDiscount, firstOrderDiscount: snapshot.firstOrderDiscount, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal }, message: "Creating Cash on Delivery order." }),
+    Remarks: encodeRemarks({ pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, shippingIncluded: snapshot.shippingIncluded, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod }, message: "Creating Cash on Delivery order." }),
   });
   const payment = await findRow(
     "PAYMENTS",

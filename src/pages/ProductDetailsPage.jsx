@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { FiCheck, FiHeart } from 'react-icons/fi';
 import { Link, useParams } from 'react-router-dom';
 import Seo from '../components/Seo.jsx';
-import FirstOrderOffer from '../components/FirstOrderOffer.jsx';
+import OnlinePaymentOffer from '../components/OnlinePaymentOffer.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { productLabelData } from '../data/productLabelData.js';
 import cheeseImage from '../assets/images/products/cheese.png';
@@ -327,7 +327,7 @@ export default function ProductDetailsPage() {
     <>
       <Seo title={product.name} description={product.shortDescription} path={`/products/${product.slug}`} image={image} />
       <main className="bg-[#FAF8F2] pb-12 text-brand-text md:pb-[60px] lg:pb-20">
-        <div className="container-page pt-6"><FirstOrderOffer /></div>
+        <div className="container-page pt-6"><OnlinePaymentOffer /></div>
         {/* Breadcrumb */}
         <nav className="container-page flex items-center gap-2 py-4 text-xs text-brand-text/50" aria-label="Breadcrumb">
           <Link to="/" className="transition-colors hover:text-[#1E4D3A]">Home</Link><span aria-hidden="true">/</span>

@@ -9,7 +9,7 @@ import CartSummary from './CartSummary.jsx';
 import CouponInput from './CouponInput.jsx';
 import EmptyCart from './EmptyCart.jsx';
 import FreeShippingBar from './FreeShippingBar.jsx';
-import FirstOrderOffer from './FirstOrderOffer.jsx';
+import OnlinePaymentOffer from './OnlinePaymentOffer.jsx';
 
 export default function CartDrawer({ isOpen, onClose, onCheckout, onApplyCoupon }) {
   const { cartItems, cartTotal, cartCount, updateQuantity } = useCart();
@@ -85,7 +85,7 @@ export default function CartDrawer({ isOpen, onClose, onCheckout, onApplyCoupon 
                         />
                       ))}
                     </AnimatePresence>
-                    <FirstOrderOffer compact />
+                    <OnlinePaymentOffer compact />
                     <CouponInput onApply={applyCoupon} />
                     <FreeShippingBar quantity={cartCount} />
                   </div>

@@ -11,6 +11,6 @@ router.get('/reviews', handle(getReviews));
 router.post('/reviews', protectCustomerRoute, requirePermission(PERMISSIONS.CUSTOMER_REVIEWS_CREATE), handle(createReview));
 router.post('/contact', handle(submitContactMessage));
 router.post('/newsletter', handle(subscribeNewsletter));
-router.post('/coupons/validate', protectCustomerRoute, requirePermission(PERMISSIONS.CUSTOMER_PROFILE_READ), handle(validateCoupon));
+router.post('/coupons/validate', handle(validateCoupon));
 
 export default router;

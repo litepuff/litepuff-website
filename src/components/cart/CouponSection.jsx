@@ -17,11 +17,11 @@ export default function CouponSection({ onApplied }) {
       const result = await contentService.validateCoupon({ code, subtotal: cartTotal });
       localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
       onApplied?.(result.coupon);
-      showToast(result.coupon.firstOrder ? 'Coupon Applied Successfully — First Order Discount confirmed.' : 'Coupon Applied Successfully');
+      showToast('✓ Coupon Applied Successfully');
     } catch (error) {
       localStorage.removeItem('litepuffCoupon');
       onApplied?.(null);
-      showToast(error.response?.data?.message || 'Coupon is not valid.', 'error');
+      showToast(error.response?.data?.message || 'Invalid coupon code.', 'error');
     } finally {
       setLoading(false);
     }

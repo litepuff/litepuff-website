@@ -41,7 +41,6 @@ export async function reportRows(type, query = {}) {
     CreatedAt: row.CreatedAt,
     Subtotal: row.Subtotal,
     ProductDiscount: row.ProductDiscount,
-    FirstOrderDiscount: row.FirstOrderDiscount,
     CouponDiscount: row.CouponDiscount,
     Discount: row.Discount,
     Shipping: row.Shipping,

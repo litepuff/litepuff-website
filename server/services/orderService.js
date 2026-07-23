@@ -91,37 +91,20 @@ async function pricedCart(customerId, requestedItems = []) {
   });
 }
 
-const successfulOrder = (order) => String(order.PaymentStatus).toLowerCase() === "paid" || ["completed", "delivered"].includes(String(order.OrderStatus).toLowerCase());
-const paymentRemarks = (value) => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
-
-async function firstOrderEligibility(customerId, paymentId) {
-  const [customers, orders] = await Promise.all([getRows("CUSTOMERS"), getRows("ORDERS")]);
-  const customer = customers.find((row) => row.CustomerID === customerId);
-  if (!customer || String(customer.Provider || "").toLowerCase() === "guest") return false;
-  if (orders.some((order) => order.CustomerID === customerId && successfulOrder(order))) return false;
-  const now = Date.now();
-  const payments = await getRows("PAYMENTS");
-  return !payments.some((payment) => {
-    if (payment.CustomerID !== customerId || payment.PaymentID === paymentId || ["Paid", "Failed", "Refunded"].includes(payment.Status)) return false;
-    const metadata = paymentRemarks(payment.Remarks);
-    return metadata.firstOrderReserved === true && new Date(metadata.checkoutExpiresAt || 0).getTime() > now;
-  });
-}
-
 export { calculateOrderPricing };
 
-async function priceCoupon(code, subtotal, customerId, { firstOrderEligible = false, firstOrderAllowed = false } = {}) {
+async function legacyCouponPricing(code, subtotal) {
   const normalized = String(code || "")
     .trim()
     .toUpperCase();
   if (!normalized) return { code: "", discount: 0, row: null };
-  const [coupons, orders] = await Promise.all([getRows("COUPONS"), getRows("ORDERS")]);
+  const coupons = await getRows("COUPONS");
   const coupon = coupons.find(
     (row) =>
       String(row.Code).trim().toUpperCase() === normalized &&
       String(row.Status).toLowerCase() === "active",
   );
-  if (!coupon) throw httpError("Coupon is not valid.", 404);
+  if (!coupon) throw httpError("Invalid coupon code.", 404);
   if (coupon.Expiry && new Date(coupon.Expiry) < new Date())
     throw httpError("Coupon has expired.", 410);
   if (Number(coupon.MinOrder || 0) > subtotal)
@@ -131,16 +114,6 @@ async function priceCoupon(code, subtotal, customerId, { firstOrderEligible = fa
     Number(coupon.UsedCount || 0) >= Number(coupon.UsageLimit)
   )
     throw httpError("Coupon usage limit reached.", 409);
-  const previouslyUsed = orders.some((order) =>
-    order.CustomerID === customerId &&
-    String(order.CouponCode || "").trim().toUpperCase() === normalized &&
-    !["cancelled", "failed"].includes(String(order.OrderStatus).toLowerCase())
-  );
-  const firstOrderCoupon = ["LITEPUFF10", "PUFFFIRST"].includes(normalized);
-  if (previouslyUsed) throw httpError(firstOrderCoupon ? "You're not eligible for the First Order Offer because it has already been used. Your Product Discount is still applied." : "This coupon has already been used by your account. Your Product Discount is still applied.", 409);
-  if (firstOrderCoupon && (!firstOrderAllowed || !firstOrderEligible)) {
-    throw httpError("You're not eligible for the First Order Offer because it has already been used. Your Product Discount is still applied.", 409);
-  }
   let discount =
     coupon.Type === "flat"
       ? Number(coupon.Value || 0)
@@ -158,26 +131,34 @@ async function priceCoupon(code, subtotal, customerId, { firstOrderEligible = fa
   };
 }
 
+async function priceOnlineCoupon(code, subtotal, paymentMethod) {
+  const normalized = String(code || "").trim().toUpperCase();
+  if (String(paymentMethod).toLowerCase() === "cod") return { code: "", discount: 0, row: null, freeShipping: false };
+  if (!normalized) return { code: "", discount: 0, row: null, freeShipping: false };
+  if (normalized !== "LITEPUFF20") throw httpError("Invalid Coupon Code.", 404);
+  const coupon = (await getRows("COUPONS")).find((row) => String(row.Code || "").trim().toUpperCase() === normalized);
+  if (coupon && String(coupon.Status || "active").toLowerCase() !== "active") throw httpError("Invalid Coupon Code.", 404);
+  if (coupon?.Expiry && new Date(coupon.Expiry) < new Date()) throw httpError("Offer Expired.", 410);
+  return { code: normalized, discount: discountMoney(subtotal * 0.20), row: coupon || null, freeShipping: false };
+}
+
 export async function buildCheckoutIntent({
   customerId,
   address,
   items,
   couponCode,
   paymentId,
-  firstOrderAllowed = false,
+  paymentMethod = "online",
 }) {
   const pricedItems = await pricedCart(customerId, items);
   const preliminary = calculateOrderPricing({ items: pricedItems });
   const { discountedSubtotal } = preliminary;
-  const firstOrderEligible = firstOrderAllowed && await firstOrderEligibility(customerId, paymentId);
-  const coupon = await priceCoupon(couponCode, discountedSubtotal, customerId, { firstOrderEligible, firstOrderAllowed });
-  const firstOrderCoupon = ["LITEPUFF10", "PUFFFIRST"].includes(coupon.code);
+  const coupon = await priceOnlineCoupon(couponCode, discountedSubtotal, paymentMethod);
   const pricing = calculateOrderPricing({
     items: pricedItems,
+    couponCode: coupon.code,
     couponDiscount: coupon.discount,
-    freeShipping: coupon.freeShipping,
-    firstOrderEligible,
-    firstOrderCoupon,
+    paymentMethod,
   });
   const snapshot = {
     paymentId,
@@ -186,8 +167,6 @@ export async function buildCheckoutIntent({
     items: pricedItems,
     couponCode: coupon.code,
     ...pricing,
-    firstOrderEligible,
-    firstOrderAllowed,
     currency: "INR",
   };
   return snapshot;
@@ -258,7 +237,7 @@ async function materializeOrderUnlocked({
         items: snapshot.items,
         couponCode: snapshot.couponCode,
         paymentId: snapshot.paymentId,
-        firstOrderAllowed: snapshot.firstOrderAllowed === true,
+        paymentMethod: snapshot.paymentMethod || (paymentMethod === "Cash on Delivery" ? "cod" : "online"),
       });
   if (
     Number(revalidated.grandTotal) !== Number(payment.Amount) ||
@@ -300,7 +279,6 @@ async function materializeOrderUnlocked({
       AddressID: addressId,
       Subtotal: revalidated.subtotal,
       ProductDiscount: revalidated.productDiscount,
-      FirstOrderDiscount: revalidated.firstOrderDiscount,
       CouponDiscount: revalidated.couponDiscount,
       Shipping: revalidated.shipping,
       Discount: revalidated.discount,

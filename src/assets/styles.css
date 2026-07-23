@@ -54,7 +54,7 @@
 
 
 @media (max-width: 639px) {
-  aside[aria-label='Welcome offer'] p {
+  aside[aria-label='Online payment offer'] p {
     min-width: max-content;
     padding-left: 100%;
     animation: announcement-marquee 16s linear infinite;

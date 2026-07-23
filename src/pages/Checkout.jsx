@@ -12,7 +12,7 @@ import {
   FiTruck,
 } from "react-icons/fi";
 import Seo from "../components/Seo.jsx";
-import FirstOrderOffer from "../components/FirstOrderOffer.jsx";
+import OnlinePaymentOffer from "../components/OnlinePaymentOffer.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useCustomerAuth } from "../context/CustomerAuthContext.jsx";
 import { apiMessage, customerService } from "../services/customerService.js";
@@ -37,6 +37,20 @@ const paymentMethods = [
     icon: FiCreditCard,
   },
   {
+    id: "netbanking",
+    label: "Net Banking",
+    description: "All major Indian banks",
+    note: "Powered by Razorpay",
+    icon: FiCreditCard,
+  },
+  {
+    id: "wallet",
+    label: "Wallets",
+    description: "Supported payment wallets",
+    note: "Powered by Razorpay",
+    icon: FiSmartphone,
+  },
+  {
     id: "cod",
     label: "Cash on Delivery",
     description: "Available",
@@ -45,7 +59,6 @@ const paymentMethods = [
   },
 ];
 
-const deliveryPartners = ["Shiprocket", "Delhivery", "Blue Dart", "DTDC", "India Post"];
 const storedCoupon = () => { try { return JSON.parse(localStorage.getItem('litepuffCoupon') || 'null'); } catch { return null; } };
 
 function loadRazorpay() {
@@ -134,7 +147,8 @@ export default function Checkout() {
   const [paymentFailure, setPaymentFailure] = useState(null);
   const checkoutForm = useRef(null);
 
-  const estimatedTotals = useOrderPricing(cartItems, { couponDiscount: appliedCoupon?.discount, freeShipping: appliedCoupon?.freeShipping, firstOrderCoupon: appliedCoupon?.firstOrder });
+  const pricingPaymentMethod = paymentMethod === "cod" ? "cod" : "online";
+  const estimatedTotals = useOrderPricing(cartItems, { couponCode: appliedCoupon?.code, couponDiscount: appliedCoupon?.discount, paymentMethod: pricingPaymentMethod });
   const [serverPricing, setServerPricing] = useState(null);
   const totals = serverPricing || estimatedTotals;
 
@@ -144,23 +158,41 @@ export default function Checkout() {
       [event.target.name]: event.target.value,
     }));
 
+  const selectPaymentMethod = (method) => {
+    setPaymentMethod(method);
+    setServerPricing(null);
+    if (method === "cod") {
+      setAppliedCoupon(null);
+      setCoupon("");
+      localStorage.removeItem("litepuffCoupon");
+    }
+  };
+
   async function selectWelcomeCoupon() {
-    setCoupon("LITEPUFF10");
-    try { await navigator.clipboard.writeText("LITEPUFF10"); } catch { /* Copy is optional on non-secure previews. */ }
+    setCoupon("LITEPUFF20");
+    try { await navigator.clipboard.writeText("LITEPUFF20"); } catch { /* Copy is optional on non-secure previews. */ }
   }
 
   async function applyCoupon() {
+    if (paymentMethod === "cod") {
+      showToast("Coupon available only for Online Payments.", "error");
+      return;
+    }
+    if (appliedCoupon?.code === coupon.trim().toUpperCase()) {
+      showToast("✓ Coupon Already Applied");
+      return;
+    }
     setServerPricing(null);
     try {
-      const result = await contentService.validateCoupon({ code: coupon, subtotal: estimatedTotals.sellingSubtotal });
+      const result = await contentService.validateCoupon({ code: coupon, subtotal: estimatedTotals.subtotal, paymentMethod: "online" });
       setAppliedCoupon(result.coupon);
       setCoupon(result.coupon.code);
       localStorage.setItem('litepuffCoupon', JSON.stringify(result.coupon));
-      showToast(result.coupon.firstOrder ? "Coupon Applied Successfully — your automatic First Order Discount is confirmed." : "Coupon Applied Successfully");
+      showToast("✓ Coupon Applied Successfully");
     } catch (couponError) {
       setAppliedCoupon(null);
       localStorage.removeItem('litepuffCoupon');
-      showToast(apiMessage(couponError, 'Coupon is not valid.'), 'error');
+      showToast(apiMessage(couponError, 'Invalid coupon code.'), 'error');
     }
   }
 
@@ -180,7 +212,7 @@ export default function Checkout() {
       const payload = {
         address,
         paymentMethod,
-        coupon,
+        coupon: paymentMethod === "cod" ? "" : appliedCoupon?.code || "",
         notes,
         items: cartItems.map((item) => ({
           productId: item.id,
@@ -342,7 +374,7 @@ export default function Checkout() {
             className="mt-9 grid items-start gap-7 lg:grid-cols-[minmax(0,65fr)_minmax(320px,35fr)]"
           >
             <div className="space-y-6">
-              <FirstOrderOffer />
+              <OnlinePaymentOffer />
               {paymentFailure && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -471,12 +503,12 @@ export default function Checkout() {
                     </h2>
                   </div>
                 </div>
-                <div className="mt-6 grid gap-3 md:grid-cols-3">
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {paymentMethods.map((method) => (
                     <button
                       key={method.id}
                       type="button"
-                      onClick={() => setPaymentMethod(method.id)}
+                      onClick={() => selectPaymentMethod(method.id)}
                       aria-pressed={paymentMethod === method.id}
                     className={`min-h-[168px] rounded-3xl border p-5 text-left transition-[transform,border-color,background-color,box-shadow] duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F5E3B] ${paymentMethod === method.id ? "-translate-y-1 border-[#1F5E3B] bg-[#EEF5F0] shadow-[0_12px_28px_rgba(31,94,59,0.10)]" : "border-[#E7E1D6] bg-white hover:-translate-y-0.5 hover:border-[#B9CDBF]"}`}
                     >
@@ -499,18 +531,17 @@ export default function Checkout() {
               <section className="rounded-[24px] border border-[#E4DED3] bg-white p-5 shadow-soft" aria-labelledby="delivery-partners-title">
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 place-items-center rounded-full bg-[#EEF3EF] text-[#1E4D3A]"><FiTruck aria-hidden="true" /></span>
-                  <div><p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C9A227]">Trusted delivery</p><h2 id="delivery-partners-title" className="font-display text-2xl font-semibold">Shiprocket Ready</h2></div>
+                  <div><p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C9A227]">Trusted delivery</p><h2 id="delivery-partners-title" className="font-display text-2xl font-semibold">Secure Shipping</h2><p className="mt-0.5 text-xs text-[#6B726D]">Powered by Shiprocket</p></div>
                 </div>
-                <div className="mt-5 flex flex-wrap gap-2" aria-label="Delivery partners">
-                  {deliveryPartners.map((partner) => <span key={partner} className="rounded-full border border-[#E7E1D6] bg-[#FAF8F3] px-3 py-2 text-xs font-semibold text-[#4E5550]">{partner}</span>)}
-                </div>
+                <p className="mt-4 text-sm leading-6 text-[#5B5F59]">Trusted delivery partners are selected automatically for your location.</p>
               </section>
 
               <section className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-[24px] border border-[#E1D5B8] bg-[#FCF8EE] p-5 shadow-soft">
                   <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold uppercase tracking-[0.2em] text-[#9A7A18]">Coupon</span>{appliedCoupon && <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 rounded-full bg-[#E5F2E9] px-2.5 py-1 text-[10px] font-bold text-[#1F5E3B]"><FiCheckCircle /> Coupon Applied Successfully</motion.span>}</div>
-                  <div className="mt-3 flex gap-2"><input aria-label="Coupon code" value={coupon} onChange={(event) => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); setServerPricing(null); }} placeholder="Enter coupon code" className="h-12 min-w-0 flex-1 rounded-xl border border-[#DDD3BE] bg-white px-4 text-sm outline-none" /><button type="button" onClick={applyCoupon} className="h-12 rounded-xl bg-[#1F5E3B] px-5 text-sm font-bold text-white">Apply</button></div>
-                  <button type="button" onClick={selectWelcomeCoupon} className="mt-3 flex w-full items-center justify-between rounded-xl border border-dashed border-[#C9A227] bg-white px-3 py-2.5 text-left transition hover:-translate-y-0.5"><span><strong className="block text-xs tracking-[0.08em] text-[#1F5E3B]">LITEPUFF10</strong><span className="text-[11px] text-[#6B726D]">10% OFF · First Order</span></span><span className="text-xs font-bold text-[#1F5E3B]">Copy & apply</span></button>
+                  <div className="mt-3 flex gap-2"><input aria-label="Coupon code" value={coupon} disabled={paymentMethod === "cod"} onChange={(event) => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); setServerPricing(null); }} placeholder={paymentMethod === "cod" ? "Online payments only" : "Enter coupon code"} className="h-12 min-w-0 flex-1 rounded-xl border border-[#DDD3BE] bg-white px-4 text-sm outline-none disabled:cursor-not-allowed disabled:bg-[#F2EFE8] disabled:text-[#8A8F8C]" /><button type="button" disabled={paymentMethod === "cod" || !coupon.trim()} onClick={applyCoupon} className="h-12 rounded-xl bg-[#1F5E3B] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">Apply</button></div>
+                  <button type="button" disabled={paymentMethod === "cod"} onClick={selectWelcomeCoupon} className="mt-3 flex w-full items-center justify-between rounded-xl border border-dashed border-[#C9A227] bg-white px-3 py-2.5 text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"><span><strong className="block text-xs tracking-[0.08em] text-[#1F5E3B]">LITEPUFF20</strong><span className="text-[11px] text-[#6B726D]">20% OFF · Online Payment</span></span><span className="text-xs font-bold text-[#1F5E3B]">Copy Coupon</span></button>
+                  {paymentMethod === "cod" && <p className="mt-3 text-xs font-semibold text-[#8A6424]">Coupon available only for Online Payments.</p>}
                 </div>
                 <label className="rounded-[24px] border border-[#ECE7DD] bg-white p-5 shadow-soft">
                   <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#C89B3C]">
@@ -548,25 +579,11 @@ export default function Checkout() {
               </div>
               <div className="mt-6 space-y-3 border-t border-[#ECE7DD] pt-5">
                 <SummaryRow
-                  label="Subtotal"
+                  label="MRP"
                   value={formatMoney(totals.subtotal)}
                 />
-                <SummaryRow label="Product Discount" value={totals.productDiscount ? `-${formatMoney(totals.productDiscount)}` : "—"} />
-                <SummaryRow label="Selling Price Total" value={formatMoney(totals.sellingSubtotal ?? (totals.subtotal - totals.productDiscount))} />
-                {totals.firstOrderDiscount > 0 && <SummaryRow label={`First Order Discount${appliedCoupon?.firstOrder ? ` (${appliedCoupon.code})` : " (Automatic)"}`} value={`-${formatMoney(totals.firstOrderDiscount)}`} />}
-                {totals.couponDiscount > 0 && <SummaryRow label={`Coupon${coupon ? ` (${coupon.toUpperCase()})` : ""}`} value={`-${formatMoney(totals.couponDiscount)}`} />}
-                <SummaryRow
-                  label="Shipping"
-                  value={
-                    totals.shipping ? formatMoney(totals.shipping) : "FREE"
-                  }
-                />
-                <SummaryRow
-                  label="Total Savings"
-                  value={
-                    totals.discount ? `-${formatMoney(totals.discount)}` : "—"
-                  }
-                />
+                {totals.couponDiscount > 0 && <SummaryRow label="Coupon Discount" value={`-${formatMoney(totals.couponDiscount)}`} />}
+                <SummaryRow label={paymentMethod === "cod" ? "Shipping Included" : "Shipping"} value={paymentMethod === "cod" ? "Included" : totals.shipping ? formatMoney(totals.shipping) : "FREE"} />
                 <SummaryRow label="Tax" value="Included" />
                 <SummaryRow
                   label="Grand Total"
