@@ -42,6 +42,7 @@ import { whatsAppConfig } from './config/WhatsAppConfig.js';
 import { whatsAppHealthService } from './services/WhatsAppHealthService.js';
 import { startShippingRetryWorker } from './services/shippingService.js';
 import { startNotificationRetryWorker } from './services/NotificationService.js';
+import { adminSheetsService } from './services/AdminSheetsService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,8 +85,8 @@ try {
   logger.error('startup.environment.invalid', { error: error.message, stack: error.stack });
   throw error;
 }
-if (env.adminEmail && env.adminPasswordHash) logger.info('auth.admin.configured');
-else logger.warn('auth.admin.disabled', { reason: 'missing-credentials', emailConfigured: Boolean(env.adminEmail), passwordHashConfigured: Boolean(env.adminPasswordHash) });
+if (env.adminSpreadsheetId) logger.info('auth.admin.database-configured');
+else logger.warn('auth.admin.disabled', { reason: 'missing-admin-spreadsheet' });
 logger.info('startup.frontend.initializing');
 ensureFrontendBuild();
 logger.info('startup.frontend.ready', { distIndex });
@@ -167,6 +168,17 @@ export function startServer(port = env.port) {
     } catch (error) {
       googleCredentialProvider.markFailure(error);
       logger.error('google-sheets.startup.failed', { code: error.code, status: error.status, error: error.message, details: error.details, stack: error.stack });
+    }
+    try {
+      const diagnostic = await adminSheetsService.diagnose();
+      logger.info('admin-database.startup.connected', diagnostic);
+    } catch (error) {
+      logger.error('admin-database.startup.failed', {
+        code: error.code,
+        status: error.status,
+        error: error.message,
+        stack: error.stack
+      });
     }
     try {
       const diagnostic = await whatsAppHealthService.check();

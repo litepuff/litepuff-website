@@ -49,12 +49,12 @@ const handle = (controller) => (request, response, next) => Promise.resolve(cont
 router.post('/login', authLimiter, handle(adminLogin));
 router.post('/logout', protectAdminRoute, handle(adminLogout));
 router.get('/profile', protectAdminRoute, handle(getAdminProfile));
-router.put('/profile', protectAdminRoute, handle(updateAdminProfile));
+router.put('/profile', protectAdminRoute, activityLogger('Settings Updated', 'Admin Profile'), handle(updateAdminProfile));
 
 router.use(protectAdminRoute);
 router.use('/whatsapp', adminWhatsAppRoutes);
 
-router.get('/dashboard', requirePermission(PERMISSIONS.ADMIN_DASHBOARD_VIEW), handle(getAdminDashboard));
+router.get('/dashboard', requirePermission(PERMISSIONS.ADMIN_DASHBOARD_VIEW), activityLogger('Dashboard Login', 'Dashboard'), handle(getAdminDashboard));
 
 router.get('/products', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_READ), handle(getAdminProducts));
 router.post('/products', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_CREATE), activityLogger('Product Added', 'Products'), handle(createAdminProduct));

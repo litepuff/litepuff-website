@@ -26,10 +26,9 @@ export const env = {
   otpMaxResends: Number(process.env.OTP_MAX_RESENDS || 3),
   otpLockMinutes: Number(process.env.OTP_LOCK_MINUTES || 15),
   otpCleanupIntervalMinutes: Number(process.env.OTP_CLEANUP_INTERVAL_MINUTES || 5),
-  adminEmail: normalizeEnvironmentValue(process.env.ADMIN_EMAIL),
-  adminPassword: process.env.ADMIN_PASSWORD || '',
-  adminPasswordHash: normalizeEnvironmentValue(process.env.ADMIN_PASSWORD_HASH),
-  adminRole: process.env.ADMIN_ROLE || 'super_admin',
+  adminSpreadsheetId: normalizeEnvironmentValue(
+    process.env.ADMIN_GOOGLE_SHEET_ID || process.env.ADMIN_SPREADSHEET_ID
+  ),
   nodeEnv: process.env.NODE_ENV || 'development',
   appUrl: process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173',
   smtpHost: process.env.SMTP_HOST || '',
@@ -39,7 +38,7 @@ export const env = {
   mailFrom: process.env.MAIL_FROM || '',
   resendApiKey: process.env.RESEND_API_KEY || '',
   emailLogoUrl: process.env.EMAIL_LOGO_URL || '',
-  adminNotifyEmail: process.env.ADMIN_NOTIFY_EMAIL || process.env.ADMIN_EMAIL || '',
+  adminNotifyEmail: process.env.ADMIN_NOTIFY_EMAIL || process.env.SUPPORT_EMAIL || '',
   razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || '',
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
@@ -68,6 +67,7 @@ export function validateProductionEnv() {
     JWT_REFRESH_SECRET: env.jwtRefreshSecret,
     COOKIE_SECRET: env.cookieSecret,
     OTP_SECRET: env.otpSecret,
+    ADMIN_GOOGLE_SHEET_ID: env.adminSpreadsheetId,
     FRONTEND_URL: env.clientUrl,
     BACKEND_URL: env.backendUrl
   };

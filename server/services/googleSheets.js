@@ -37,11 +37,16 @@ async function accessToken() {
   }
 }
 
-async function request(path, options = {}, attempt = 0) {
+async function request(
+  path,
+  options = {},
+  attempt = 0,
+  spreadsheetId = googleSheetsConfig.spreadsheetId
+) {
   const started = performance.now();
   let response;
   try {
-    response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${googleSheetsConfig.spreadsheetId}${path}`, {
+    response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}${path}`, {
       ...options,
       signal: AbortSignal.timeout(8_000),
       headers: {
@@ -54,7 +59,7 @@ async function request(path, options = {}, attempt = 0) {
     if (cause instanceof AppError && cause.code !== 'GOOGLE_TOKEN_NETWORK_ERROR') throw cause;
     if (attempt < MAX_RETRIES) {
       await new Promise((resolve) => setTimeout(resolve, (1_000 * (2 ** attempt)) + Math.floor(Math.random() * 250)));
-      return request(path, options, attempt + 1);
+      return request(path, options, attempt + 1, spreadsheetId);
     }
     if (cause instanceof AppError) throw cause;
     const error = new AppError(`Google Sheets network request failed: ${cause.message}`, { status: 503, code: cause.name === 'TimeoutError' ? 'GOOGLE_SHEETS_TIMEOUT' : 'GOOGLE_SHEETS_NETWORK_ERROR', details: { step: 'spreadsheet-request', causeCode: cause.code || cause.name }, cause, expose: true });
@@ -66,7 +71,7 @@ async function request(path, options = {}, attempt = 0) {
     if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
       const retryAfter = Number(response.headers.get('retry-after') || 0) * 1_000;
       await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfter, (1_000 * (2 ** attempt)) + Math.floor(Math.random() * 250))));
-      return request(path, options, attempt + 1);
+      return request(path, options, attempt + 1, spreadsheetId);
     }
     const permissionHint = response.status === 403 ? ` Share the spreadsheet with ${googleSheetsConfig.serviceAccountEmail} as Editor and ensure the Google Sheets API is enabled.` : '';
     const code = response.status === 403 ? 'GOOGLE_SHEETS_PERMISSION_DENIED' : response.status === 404 ? 'GOOGLE_SPREADSHEET_NOT_FOUND' : response.status === 429 ? 'GOOGLE_SHEETS_RATE_LIMITED' : 'GOOGLE_SHEETS_API_ERROR';
@@ -165,6 +170,11 @@ async function rawValues(range) {
     .finally(() => inFlightReads.delete(key));
   inFlightReads.set(key, operation);
   return operation;
+}
+
+export function requestSpreadsheet(spreadsheetId, path, options = {}) {
+  if (!spreadsheetId) throw new Error('Spreadsheet ID is required');
+  return request(path, options, 0, spreadsheetId);
 }
 
 async function batchRawValues(ranges) {

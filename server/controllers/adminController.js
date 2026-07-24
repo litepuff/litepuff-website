@@ -15,6 +15,7 @@ import { notificationService } from "../services/NotificationService.js";
 import { AppError } from "../utils/AppError.js";
 import { logger } from "../utils/logger.js";
 import { productPricing } from "../utils/productPricing.js";
+import { adminSheetsService } from "../services/AdminSheetsService.js";
 
 const now = () => new Date().toISOString();
 const money = (value) => Number(Number(value || 0).toFixed(2));
@@ -34,12 +35,19 @@ const ORDER_STATUSES = [
   "Refunded",
 ];
 
-const adminProfile = (email = env.adminEmail) => ({
-  id: "admin-1",
-  name: "LitePuff Admin",
-  email,
+const adminRole = (role) => {
+  const normalized = text(role).toLowerCase().replaceAll(" ", "_");
+  if (normalized === "owner") return "super_admin";
+  return ["super_admin", "admin", "manager", "support"].includes(normalized)
+    ? normalized
+    : "";
+};
+const adminProfile = (row) => ({
+  id: row.AdminID,
+  name: row.Name,
+  email: row.Email,
   role: "admin",
-  adminRole: env.adminRole,
+  adminRole: adminRole(row.Role),
 });
 
 const filterSearch = (rows, query, fields) => {
@@ -131,47 +139,77 @@ export async function adminLogin(request, response) {
   const email = String(request.body?.email || "").trim().toLowerCase();
   const password = String(request.body?.password || "");
   if (!email || !password) throw new AppError("Email and password are required.", { status: 422, code: "VALIDATION_ERROR", expose: true });
-  if (!env.adminEmail || !env.adminPasswordHash || !env.jwtSecret) {
-    logger.error("auth.admin.configuration-invalid", { requestId: request.id, emailConfigured: Boolean(env.adminEmail), passwordHashConfigured: Boolean(env.adminPasswordHash), jwtConfigured: Boolean(env.jwtSecret) });
+  if (!env.adminSpreadsheetId || !env.jwtSecret) {
+    logger.error("auth.admin.configuration-invalid", { requestId: request.id, databaseConfigured: Boolean(env.adminSpreadsheetId), jwtConfigured: Boolean(env.jwtSecret) });
     throw new AppError("Admin authentication is not configured.", { status: 503, code: "ADMIN_AUTH_NOT_CONFIGURED", expose: true });
   }
-  const emailMatches = email === env.adminEmail.trim().toLowerCase();
-  let passwordMatches = false;
+  let row;
   try {
-    passwordMatches = await bcrypt.compare(password, env.adminPasswordHash);
+    row = await adminSheetsService.findAdminByEmail(email);
   } catch (error) {
-    logger.error("Invalid ADMIN_PASSWORD_HASH configuration.", { requestId: request.id });
-    throw new AppError("Admin authentication is temporarily unavailable.", { status: 500, code: "ADMIN_AUTH_CONFIGURATION_ERROR", expose: true, cause: error });
+    logger.error("auth.admin.database-unavailable", { requestId: request.id, code: error.code, error: error.message });
+    throw new AppError("Admin authentication is temporarily unavailable.", { status: 503, code: "ADMIN_AUTH_UNAVAILABLE", expose: true, cause: error });
   }
-  if (!emailMatches || !passwordMatches) {
-    logger.warn("auth.admin.login-rejected", { requestId: request.id, reason: !emailMatches ? "email-mismatch" : "password-mismatch" });
+  if (!row) {
+    logger.warn("auth.admin.login-rejected", { requestId: request.id, reason: "email-not-found" });
     throw new AppError("The email or password is incorrect.", { status: 401, code: "INVALID_ADMIN_CREDENTIALS", expose: true });
   }
-  const admin = adminProfile(env.adminEmail);
+  if (text(row.Status).toLowerCase() !== "active") {
+    logger.warn("auth.admin.login-rejected", { requestId: request.id, reason: "inactive-admin", adminId: row.AdminID });
+    throw new AppError("This admin account is inactive.", { status: 403, code: "ADMIN_INACTIVE", expose: true });
+  }
+  if (!adminRole(row.Role)) {
+    logger.error("auth.admin.role-invalid", { requestId: request.id, adminId: row.AdminID, role: row.Role });
+    throw new AppError("Admin authentication is temporarily unavailable.", { status: 503, code: "ADMIN_ROLE_INVALID", expose: true });
+  }
+  let passwordMatches = false;
+  try {
+    passwordMatches = await bcrypt.compare(password, row.PasswordHash);
+  } catch (error) {
+    logger.error("auth.admin.password-hash-invalid", { requestId: request.id, adminId: row.AdminID });
+    throw new AppError("Admin authentication is temporarily unavailable.", { status: 500, code: "ADMIN_AUTH_CONFIGURATION_ERROR", expose: true, cause: error });
+  }
+  if (!passwordMatches) {
+    logger.warn("auth.admin.login-rejected", { requestId: request.id, reason: "password-mismatch", adminId: row.AdminID });
+    throw new AppError("The email or password is incorrect.", { status: 401, code: "INVALID_ADMIN_CREDENTIALS", expose: true });
+  }
+  const admin = adminProfile(row);
   let token;
   try { token = jwt.sign(admin, env.jwtSecret, { algorithm: "HS256", expiresIn: "7d" }); }
   catch (error) {
     logger.error("auth.admin.token-generation-failed", { requestId: request.id, error: error.message });
     throw new AppError("Admin authentication is temporarily unavailable.", { status: 503, code: "ADMIN_AUTH_UNAVAILABLE", expose: true, cause: error });
   }
+  const timestamp = now();
+  await adminSheetsService.updateAdmin(row, { LastLogin: timestamp, UpdatedAt: timestamp });
+  await adminSheetsService.recordActivity({ request, admin, action: "Login", module: "Authentication" });
   logger.info("auth.admin.login-succeeded", { requestId: request.id, role: admin.role });
   ok(response, { admin, token }, "Admin signed in successfully.");
 }
 
-export function adminLogout(request, response) {
+export async function adminLogout(request, response) {
+  await adminSheetsService.recordActivity({ request, admin: request.admin, action: "Logout", module: "Authentication" });
   ok(response, {}, "Admin signed out successfully.");
 }
 
-export function getAdminProfile(request, response) {
-  ok(response, { admin: request.admin || adminProfile() });
+export async function getAdminProfile(request, response) {
+  const row = await adminSheetsService.findAdminById(request.admin.id);
+  if (!row || text(row.Status).toLowerCase() !== "active") {
+    throw new AppError("Admin account is unavailable.", { status: 403, code: "ADMIN_INACTIVE", expose: true });
+  }
+  ok(response, { admin: adminProfile(row) });
 }
 
-export function updateAdminProfile(request, response) {
+export async function updateAdminProfile(request, response) {
+  const row = await adminSheetsService.findAdminById(request.admin.id);
+  if (!row || text(row.Status).toLowerCase() !== "active") {
+    throw new AppError("Admin account is unavailable.", { status: 403, code: "ADMIN_INACTIVE", expose: true });
+  }
+  const name = text(request.body.name) || row.Name;
+  const updated = await adminSheetsService.updateAdmin(row, { Name: name, UpdatedAt: now() });
   ok(
     response,
-    {
-      admin: { ...adminProfile(), name: request.body.name || "LitePuff Admin" },
-    },
+    { admin: adminProfile(updated) },
     "Admin profile preferences updated.",
   );
 }

@@ -12,7 +12,7 @@ export default function AdminProfilePage() {
   async function save(event) {
     event.preventDefault();
     await adminService.updateProfile({ name });
-    setMessage('Profile preferences saved for this session. Admin credentials remain environment-managed for security.');
+    setMessage('Admin profile updated securely.');
   }
 
   async function createBackup() {
@@ -37,7 +37,7 @@ export default function AdminProfilePage() {
         </form>
         <aside className="rounded-[24px] border border-brand-border bg-white p-6 shadow-sm">
           <h2 className="font-display text-2xl font-black">Security</h2>
-          <p className="mt-2 text-sm text-brand-muted">Admin password is stored in environment variables, not Google Sheets, to keep the approved sheet schema clean.</p>
+          <p className="mt-2 text-sm text-brand-muted">Admin identity and password security are managed through the protected admin database.</p>
           <button onClick={createBackup} className="mt-5 rounded-2xl bg-brand-primary px-5 py-3 text-sm font-black text-white">Create Backup</button>
           <button onClick={logout} className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700">Logout</button>
           {backups.length ? <div className="mt-5 grid gap-2 text-xs text-brand-muted">{backups.slice(0, 5).map((backup) => <span key={backup.BackupID}>{backup.FileName}</span>)}</div> : null}
