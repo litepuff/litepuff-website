@@ -207,7 +207,7 @@ export async function syncGoogleSheetsSchema() {
     }
 
     const sheetEntries = Object.entries(SHEETS);
-    const valuesBySheet = await batchRawValues(sheetEntries.map(([title]) => `${title}!A:Z`));
+    const valuesBySheet = await batchRawValues(sheetEntries.map(([title]) => `${title}!A:ZZ`));
 
     for (const [index, [title, headers]] of sheetEntries.entries()) {
       const values = valuesBySheet[index] || [];
@@ -223,7 +223,7 @@ export async function syncGoogleSheetsSchema() {
           if (header === 'Provider') return String(record.GoogleAuth).toLowerCase() === 'true' ? 'Google' : 'Password';
           return record[header] ?? '';
         }));
-        await request(`/values/${encodeURIComponent(`${title}!A:Z`)}:clear`, { method: 'POST', body: '{}' });
+        await request(`/values/${encodeURIComponent(`${title}!A:ZZ`)}:clear`, { method: 'POST', body: '{}' });
         await writeValues(`${title}!A1`, [headers, ...migrated]);
         invalidate(title);
         continue;
@@ -242,7 +242,7 @@ export async function syncGoogleSheetsSchema() {
       if (invalid && title === 'CUSTOMERS' && currentHeaders.includes('CustomerID')) {
         const records = values.slice(1).map((row) => Object.fromEntries(currentHeaders.map((header, index) => [header, row[index] ?? ''])));
         const migrated = records.map((record) => headers.map((header) => record[header] ?? (header === 'MarketingConsent' ? 'false' : '')));
-        await request(`/values/${encodeURIComponent(`${title}!A:Z`)}:clear`, { method: 'POST', body: '{}' });
+        await request(`/values/${encodeURIComponent(`${title}!A:ZZ`)}:clear`, { method: 'POST', body: '{}' });
         await writeValues(`${title}!A1`, [headers, ...migrated]);
         invalidate(title);
         continue;
@@ -269,14 +269,14 @@ export async function synchronizeGoogleSheets({ removeUnused = false } = {}) {
   }
 
   for (const [title, headers] of Object.entries(SHEETS)) {
-    const values = existing.has(title) ? await rawValues(`${title}!A:Z`) : [];
+    const values = existing.has(title) ? await rawValues(`${title}!A:ZZ`) : [];
     const currentHeaders = values[0] || [];
     const indexes = headers.map((header) => {
       const candidates = [header, ...(COLUMN_ALIASES[title]?.[header] || [])];
       return currentHeaders.findIndex((current) => candidates.includes(current));
     });
     const normalizedRows = values.slice(1).map((row) => indexes.map((index) => index >= 0 ? row[index] ?? '' : ''));
-    await request(`/values/${encodeURIComponent(`${title}!A:Z`)}:clear`, { method: 'POST', body: '{}' });
+    await request(`/values/${encodeURIComponent(`${title}!A:ZZ`)}:clear`, { method: 'POST', body: '{}' });
     await writeValues(`${title}!A1`, [headers, ...normalizedRows]);
     invalidate(title);
   }
@@ -285,7 +285,7 @@ export async function synchronizeGoogleSheets({ removeUnused = false } = {}) {
   if (removeUnused && unused.length) {
     const populated = [];
     for (const [title] of unused) {
-      if ((await rawValues(`${title}!A:Z`)).length > 1) populated.push(title);
+      if ((await rawValues(`${title}!A:ZZ`)).length > 1) populated.push(title);
     }
     if (populated.length) {
       const error = new Error(`Refusing to delete populated non-standard sheets: ${populated.join(', ')}.`);
@@ -304,7 +304,7 @@ export async function synchronizeGoogleSheets({ removeUnused = false } = {}) {
 export async function inspectGoogleSheetsSchema() {
   const spreadsheet = await request('?fields=properties.title,sheets.properties');
   const worksheets = spreadsheet.sheets || [];
-  const valuesBySheet = await batchRawValues(worksheets.map((sheet) => `${sheet.properties.title}!A:Z`));
+  const valuesBySheet = await batchRawValues(worksheets.map((sheet) => `${sheet.properties.title}!A:ZZ`));
   return worksheets.map((sheet, index) => {
     const title = sheet.properties.title;
     const values = valuesBySheet[index] || [];
@@ -348,7 +348,7 @@ export async function getRows(sheetName) {
   const cached = rowCache.get(sheetName);
   if (cached && Date.now() < cached.expiresAt) return cached.rows.map((row) => ({ ...row }));
   await syncGoogleSheetsSchema();
-  const values = await rawValues(`${sheetName}!A:Z`);
+  const values = await rawValues(`${sheetName}!A:ZZ`);
   const headers = values[0]?.length ? values[0].map((current) => {
     return SHEETS[sheetName].find((header) => header === current || COLUMN_ALIASES[sheetName]?.[header]?.includes(current)) || current;
   }) : SHEETS[sheetName];

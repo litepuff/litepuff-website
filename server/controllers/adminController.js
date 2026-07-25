@@ -106,7 +106,7 @@ const productDto = (row) => {
   });
 };
 
-const orderDto = (row, customer = null, items = [], payment = null) => ({
+const orderDto = (row, customer = null, items = [], payment = null, shipment = null) => ({
   id: row.OrderID,
   orderId: row.OrderID,
   orderNumber: row.OrderNumber,
@@ -130,6 +130,14 @@ const orderDto = (row, customer = null, items = [], payment = null) => ({
   status: row.OrderStatus,
   orderStatus: row.OrderStatus,
   trackingNumber: row.TrackingNumber,
+  shippingProvider: shipment?.Provider || row.ShippingProvider,
+  awbNumber: shipment?.AWBNumber || row.AWBNumber,
+  courierName: shipment?.CourierName || row.CourierName,
+  trackingUrl: shipment?.TrackingURL || row.TrackingURL,
+  shippingStatus: shipment?.ShippingStatus || row.ShippingStatus || 'Pending Shipment',
+  pickupStatus: shipment?.PickupStatus || row.PickupStatus,
+  labelUrl: shipment?.LabelURL || row.LabelURL,
+  manifestUrl: shipment?.ManifestURL || row.ManifestURL,
   estimatedDelivery: row.EstimatedDelivery,
   createdAt: row.CreatedAt,
   updatedAt: row.UpdatedAt,
@@ -494,11 +502,12 @@ export async function duplicateAdminProduct(request, response) {
 }
 
 export async function getAdminOrders(request, response) {
-  const [orders, customers, items, payments] = await Promise.all([
+  const [orders, customers, items, payments, shipments] = await Promise.all([
     getRows("ORDERS"),
     getRows("CUSTOMERS"),
     getRows("ORDER_ITEMS"),
     getRows("PAYMENTS"),
+    getRows("SHIPMENTS"),
   ]);
   let rows = orders.reverse();
   rows = filterSearch(rows, request.query.search, [
@@ -527,6 +536,7 @@ export async function getAdminOrders(request, response) {
         : null,
       items.filter((item) => item.OrderID === order.OrderID),
       payments.find((payment) => payment.OrderID === order.OrderID),
+      shipments.find((shipment) => shipment.OrderID === order.OrderID),
     );
   });
   const page = paginate(mapped, request);

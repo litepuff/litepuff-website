@@ -106,6 +106,17 @@ export default function OrderTracking() {
                       Estimated delivery:{" "}
                       <strong>{order.estimatedDelivery}</strong>
                     </p>
+                    <p className="mt-1 text-[#5B5F59]">
+                      Courier: <strong>{order.courierName || "Pending assignment"}</strong>
+                    </p>
+                    <p className="mt-1 text-[#5B5F59]">
+                      Shipping status: <strong>{order.shippingStatus}</strong>
+                    </p>
+                    {order.trackingUrl && (
+                      <a className="mt-3 inline-flex font-semibold text-[#1E4D3A] underline" href={order.trackingUrl} target="_blank" rel="noreferrer">
+                        Track with {order.courierName || order.shippingProvider}
+                      </a>
+                    )}
                   </div>
                   <span className="w-fit rounded-full bg-[#EEF3EF] px-4 py-2 text-sm font-bold text-[#1E4D3A]">
                     {order.status}

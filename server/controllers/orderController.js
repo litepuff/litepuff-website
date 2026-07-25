@@ -7,6 +7,7 @@ export function orderDto(
   tracking = [],
   address = null,
   payment = null,
+  shipment = null,
 ) {
   return {
     id: row.OrderID,
@@ -31,6 +32,12 @@ export function orderDto(
     status: row.OrderStatus,
     trackingId: row.TrackingNumber,
     trackingNumber: row.TrackingNumber,
+    shippingProvider: shipment?.Provider || row.ShippingProvider,
+    awbNumber: shipment?.AWBNumber || row.AWBNumber,
+    courierName: shipment?.CourierName || row.CourierName,
+    shippingStatus: shipment?.ShippingStatus || row.ShippingStatus || 'Pending Shipment',
+    pickupStatus: shipment?.PickupStatus || row.PickupStatus,
+    trackingUrl: shipment?.TrackingURL || row.TrackingURL,
     estimatedDelivery: row.EstimatedDelivery,
     createdAt: row.CreatedAt,
     updatedAt: row.UpdatedAt,
@@ -56,11 +63,12 @@ async function ownedOrder(customerId, orderId) {
 }
 
 export async function decorateOrder(row) {
-  const [items, tracking, payments, addresses] = await Promise.all([
+  const [items, tracking, payments, addresses, shipments] = await Promise.all([
     getRows("ORDER_ITEMS"),
     getRows("ORDER_TRACKING"),
     getRows("PAYMENTS"),
     getRows("ADDRESSES"),
+    getRows("SHIPMENTS"),
   ]);
   return orderDto(
     row,
@@ -90,13 +98,15 @@ export async function decorateOrder(row) {
         item.AddressID === row.AddressID && item.CustomerID === row.CustomerID,
     ) || null,
     payments.find((item) => item.OrderID === row.OrderID) || null,
+    shipments.find((item) => item.OrderID === row.OrderID) || null,
   );
 }
 
 export async function getOrders(request, response) {
-  const [rows, payments] = await Promise.all([
+  const [rows, payments, shipments] = await Promise.all([
     getRows("ORDERS"),
     getRows("PAYMENTS"),
+    getRows("SHIPMENTS"),
   ]);
   const visible = request.customer
     ? rows.filter((row) => row.CustomerID === request.customer.id)
@@ -110,6 +120,7 @@ export async function getOrders(request, response) {
           [],
           null,
           payments.find((payment) => payment.OrderID === row.OrderID) || null,
+          shipments.find((shipment) => shipment.OrderID === row.OrderID) || null,
         ),
       )
       .reverse(),

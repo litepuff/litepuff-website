@@ -65,6 +65,15 @@ export default function AdminOrdersPage() {
         columns={[
           { key: "orderNumber", label: "Order" },
           { key: "trackingNumber", label: "Tracking ID" },
+          { key: "shippingProvider", label: "Shipping Provider" },
+          { key: "awbNumber", label: "AWB Number" },
+          { key: "courierName", label: "Courier" },
+          {
+            key: "shippingStatus",
+            label: "Shipment Status",
+            render: (row) => <AdminStatusBadge>{row.shippingStatus}</AdminStatusBadge>,
+          },
+          { key: "pickupStatus", label: "Pickup Status" },
           {
             key: "customer",
             label: "Customer",
@@ -115,8 +124,23 @@ export default function AdminOrdersPage() {
                 adminService.createShipment(row.id).then(() => load())
               }
             >
-              Ready
+              {row.shippingStatus === "Retry Pending" ? "Retry Shipment" : "Generate Label"}
             </button>
+            {row.trackingUrl && (
+              <a className="admin-action" href={row.trackingUrl} target="_blank" rel="noreferrer">
+                Track
+              </a>
+            )}
+            {row.labelUrl && (
+              <a className="admin-action" href={row.labelUrl} target="_blank" rel="noreferrer" download>
+                Download Label
+              </a>
+            )}
+            {row.manifestUrl && (
+              <a className="admin-action" href={row.manifestUrl} target="_blank" rel="noreferrer">
+                Manifest
+              </a>
+            )}
             <button
               className="admin-action"
               onClick={() => downloadInvoice(row)}

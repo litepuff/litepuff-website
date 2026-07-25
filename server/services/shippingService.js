@@ -2,6 +2,10 @@ import { env } from '../config/env.js';
 import { appendRow, getRows, updateRow } from './googleSheets.js';
 import { createId } from '../utils/createId.js';
 import { logger } from '../utils/logger.js';
+import { adminSheetsService } from './AdminSheetsService.js';
+
+const logShippingActivity = (action, metadata) =>
+  adminSheetsService.recordActivity({ action, module: 'Shipping', metadata }).catch(() => {});
 
 const requestJson = async (url, options = {}, attempt = 0) => {
   try {
@@ -51,17 +55,17 @@ class ShiprocketProvider {
 
 class DelhiveryProvider {
   name = 'delhivery'; configured() { return Boolean(env.delhiveryToken && env.delhiveryClientName); }
-  headers() { return { Authorization: `Token ${env.delhiveryToken}`, 'Content-Type': 'application/json' }; }
+  headers(contentType = 'application/json') { return { Authorization: `Token ${env.delhiveryToken}`, 'Content-Type': contentType }; }
   async quote(input) {
     await requestJson(`https://track.delhivery.com/c/api/pin-codes/json/?filter_codes=${input.destinationPincode}`, { headers: this.headers() });
     return { provider: this.name, cost: Number.MAX_SAFE_INTEGER, estimatedDays: 99, courier: 'Delhivery' };
   }
   async create(order) {
     const shipment = orderToDelhivery(order);
-    const data = await requestJson('https://track.delhivery.com/api/cmu/create.json', { method: 'POST', headers: this.headers(), body: new URLSearchParams({ format: 'json', data: JSON.stringify({ shipments: [shipment], pickup_location: { name: env.delhiveryClientName } }) }) });
+    const data = await requestJson('https://track.delhivery.com/api/cmu/create.json', { method: 'POST', headers: this.headers('application/x-www-form-urlencoded'), body: new URLSearchParams({ format: 'json', data: JSON.stringify({ shipments: [shipment], pickup_location: { name: env.delhiveryClientName } }) }) });
     const result = data.packages?.[0] || {};
     if (!result.waybill) throw new Error(result.remarks?.[0] || 'Delhivery booking failed.');
-    return { providerShipmentId: result.refnum || order.OrderNumber, awb: result.waybill, courier: 'Delhivery', status: result.status || 'Manifested' };
+    return { providerShipmentId: result.refnum || order.OrderNumber, awb: result.waybill, courier: 'Delhivery', status: result.status || 'Manifested', trackingUrl: `https://www.delhivery.com/track/package/${encodeURIComponent(result.waybill)}` };
   }
   tracking(awb) { return requestJson(`https://track.delhivery.com/api/v1/packages/json/?waybill=${encodeURIComponent(awb)}`, { headers: this.headers() }); }
   cancel(awb) { return requestJson('https://track.delhivery.com/api/p/edit', { method: 'POST', headers: this.headers(), body: JSON.stringify({ waybill: awb, cancellation: 'true' }) }); }
@@ -80,8 +84,12 @@ export async function chooseCourier(input) {
 }
 
 export async function createShipment(order, preferredProvider) {
+  if (!order._row) {
+    const savedOrder = (await getRows('ORDERS')).find((row) => row.OrderID === order.OrderID);
+    if (savedOrder) order = { ...savedOrder, ...order };
+  }
   const existing = (await getRows('SHIPMENTS')).find((row) => row.OrderID === order.OrderID);
-  if (existing && existing.AWB && !['Failed', 'Retry Pending'].includes(existing.Status)) return existing;
+  if (existing && existing.AWBNumber && !['Failed', 'Retry Pending'].includes(existing.ShippingStatus)) return existing;
   const input = { originPincode: env.shippingOriginPincode, destinationPincode: order.Pincode || order.shippingAddress?.pincode, weight: order.weight || env.shippingWeightKg, cod: order.PaymentMethod === 'Cash on Delivery' };
   let quote;
   try {
@@ -90,30 +98,38 @@ export async function createShipment(order, preferredProvider) {
     quote = selected ? await selected.quote(input) : await chooseCourier(input);
   } catch (error) {
     const failedAt = new Date().toISOString();
-    const pending = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: preferredProvider || '', ProviderShipmentID: '', AWB: '', Courier: '', Cost: '', EstimatedDays: '', LabelURL: '', Status: 'Retry Pending', TrackingURL: '', CreatedAt: existing?.CreatedAt || failedAt, UpdatedAt: failedAt };
+    const pending = pendingShipment(order, existing, preferredProvider, failedAt);
     if (existing) await updateRow('SHIPMENTS', existing._row, pending).catch(() => {});
     else await appendRow('SHIPMENTS', pending).catch(() => {});
+    await markShipmentPending(order, preferredProvider, failedAt);
+    await logShippingActivity('Shipment Failed', { orderId: order.OrderID, provider: preferredProvider || 'delhivery', error: error.message });
     throw Object.assign(error, { code: 'SHIPMENT_RETRY_PENDING' });
   }
-  const fallbacks = [shippingProviders[quote.provider], ...Object.values(shippingProviders).filter((provider) => provider.name !== quote.provider && provider.configured())];
+  const fallbacks = preferredProvider
+    ? [shippingProviders[quote.provider]]
+    : [shippingProviders[quote.provider], ...Object.values(shippingProviders).filter((provider) => provider.name !== quote.provider && provider.configured())];
   let lastError;
   for (const provider of fallbacks) {
     try {
       const selectedQuote = provider.name === quote.provider ? quote : await provider.quote(input);
       const result = await provider.create(order, selectedQuote);
       const now = new Date().toISOString();
-      const record = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: provider.name, ProviderShipmentID: result.providerShipmentId, AWB: result.awb, Courier: result.courier, Cost: selectedQuote.cost, EstimatedDays: selectedQuote.estimatedDays, LabelURL: '', Status: result.status, TrackingURL: '', CreatedAt: existing?.CreatedAt || now, UpdatedAt: now };
+      const record = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: provider.name, ProviderShipmentID: result.providerShipmentId, AWBNumber: result.awb, TrackingNumber: result.awb, CourierName: result.courier, ShippingCharge: Number.isSafeInteger(selectedQuote.cost) ? '' : selectedQuote.cost, EstimatedDays: selectedQuote.estimatedDays, EstimatedDelivery: order.EstimatedDelivery, LabelURL: '', ManifestURL: '', ShippingStatus: result.status, PickupStatus: 'Pending', TrackingURL: result.trackingUrl || '', PackageWeight: input.weight, PackageLength: 20, PackageWidth: 15, PackageHeight: 10, CreatedAt: existing?.CreatedAt || now, UpdatedAt: now };
       if (existing) await updateRow('SHIPMENTS', existing._row, record);
       else await appendRow('SHIPMENTS', record);
-      if (order._row) await updateRow('ORDERS', order._row, { ...order, TrackingNumber: result.awb, OrderStatus: 'Shipped', UpdatedAt: now });
+      if (order._row) await updateRow('ORDERS', order._row, { ...order, OrderStatus: order.OrderStatus === 'Pending Shipment' ? 'Confirmed' : order.OrderStatus, TrackingNumber: result.awb, ShippingProvider: provider.name, ShipmentID: record.ShipmentID, AWBNumber: result.awb, CourierName: result.courier, TrackingURL: record.TrackingURL, ShippingStatus: result.status, PickupStatus: record.PickupStatus, LabelURL: '', ManifestURL: '', ShippingCreatedAt: record.CreatedAt, ShippingUpdatedAt: now, UpdatedAt: now });
       await appendRow('ORDER_TRACKING', { TrackingID: createId('tracking'), OrderID: order.OrderID, CurrentStatus: 'Shipped', UpdatedBy: provider.name, Remarks: `${result.courier} · ${result.awb}`, UpdatedAt: now, EstimatedDeliveryDate: order.EstimatedDelivery });
+      await logShippingActivity('Shipment Created', { orderId: order.OrderID, shipmentId: record.ShipmentID, provider: provider.name });
+      await logShippingActivity('AWB Generated', { orderId: order.OrderID, awb: result.awb, provider: provider.name });
       return record;
     } catch (error) { lastError = error; }
   }
   const failedAt = new Date().toISOString();
-  const pending = { ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`, OrderID: order.OrderID, Provider: preferredProvider || '', ProviderShipmentID: '', AWB: '', Courier: '', Cost: '', EstimatedDays: '', LabelURL: '', Status: 'Retry Pending', TrackingURL: '', CreatedAt: existing?.CreatedAt || failedAt, UpdatedAt: failedAt };
+  const pending = pendingShipment(order, existing, preferredProvider, failedAt);
   if (existing) await updateRow('SHIPMENTS', existing._row, pending).catch(() => {});
   else await appendRow('SHIPMENTS', pending).catch(() => {});
+  await markShipmentPending(order, preferredProvider, failedAt);
+  await logShippingActivity('Shipment Failed', { orderId: order.OrderID, provider: preferredProvider || 'delhivery', error: lastError?.message });
   throw Object.assign(lastError || new Error('Shipment creation is pending retry.'), { status: 503, code: 'SHIPMENT_RETRY_PENDING' });
 }
 
@@ -123,7 +139,7 @@ export async function fetchLiveTracking(orderId, customerId) {
   const shipment = (await getRows('SHIPMENTS')).find((row) => row.OrderID === order.OrderID);
   const timeline = (await getRows('ORDER_TRACKING')).filter((row) => row.OrderID === order.OrderID);
   let live = null;
-  if (shipment?.AWB && shippingProviders[shipment.Provider]?.configured()) live = await shippingProviders[shipment.Provider].tracking(shipment.AWB).catch(() => null);
+  if (shipment?.AWBNumber && shippingProviders[shipment.Provider]?.configured()) live = await shippingProviders[shipment.Provider].tracking(shipment.AWBNumber).catch(() => null);
   return { order, shipment, tracking: timeline, live, provider: shipment?.Provider || 'pending' };
 }
 
@@ -132,12 +148,37 @@ export async function cancelShipment(orderId) {
   if (!shipment) throw Object.assign(new Error('Shipment not found.'), { status: 404 });
   const provider = shippingProviders[shipment.Provider];
   if (!provider?.configured()) throw Object.assign(new Error(`${shipment.Provider} is not configured.`), { status: 503 });
-  await provider.cancel(shipment.Provider === 'shiprocket' ? [Number(shipment.ProviderShipmentID)] : shipment.AWB);
-  shipment.Status = 'Cancelled'; shipment.UpdatedAt = new Date().toISOString();
+  await provider.cancel(shipment.Provider === 'shiprocket' ? [Number(shipment.ProviderShipmentID)] : shipment.AWBNumber);
+  shipment.ShippingStatus = 'Cancelled'; shipment.UpdatedAt = new Date().toISOString();
   await updateRow('SHIPMENTS', shipment._row, shipment);
   await appendRow('ORDER_TRACKING', { TrackingID: createId('tracking'), OrderID: shipment.OrderID, CurrentStatus: 'Cancelled', UpdatedBy: 'Admin', Remarks: `Cancelled with ${shipment.Provider}`, UpdatedAt: shipment.UpdatedAt, EstimatedDeliveryDate: '' });
+  await logShippingActivity('Shipment Cancelled', { orderId: shipment.OrderID, shipmentId: shipment.ShipmentID, provider: shipment.Provider });
   return shipment;
 }
+
+const pendingShipment = (order, existing, provider, timestamp) => ({
+  ShipmentID: existing?.ShipmentID || `shipment-${order.OrderID}`,
+  OrderID: order.OrderID,
+  Provider: provider || 'delhivery',
+  ProviderShipmentID: '',
+  AWBNumber: '',
+  TrackingNumber: '',
+  CourierName: '',
+  ShippingCharge: '',
+  EstimatedDays: '',
+  LabelURL: '',
+  ManifestURL: '',
+  ShippingStatus: 'Retry Pending',
+  PickupStatus: 'Pending',
+  TrackingURL: '',
+  CreatedAt: existing?.CreatedAt || timestamp,
+  UpdatedAt: timestamp
+});
+
+const markShipmentPending = (order, provider, timestamp) =>
+  order._row
+    ? updateRow('ORDERS', order._row, { ...order, OrderStatus: 'Pending Shipment', ShippingProvider: provider || 'delhivery', ShippingStatus: 'Retry Pending', PickupStatus: 'Pending', ShippingUpdatedAt: timestamp }).catch(() => {})
+    : Promise.resolve();
 
 const orderToShiprocket = (order) => ({ order_id: order.OrderNumber, order_date: order.CreatedAt, pickup_location: env.shiprocketPickupLocation, billing_customer_name: order.shippingAddress?.name, billing_address: order.shippingAddress?.addressLine, billing_city: order.shippingAddress?.city, billing_pincode: order.shippingAddress?.pincode, billing_state: order.shippingAddress?.state, billing_country: 'India', billing_email: order.email || '', billing_phone: order.shippingAddress?.phone, shipping_is_billing: true, order_items: (order.items || []).map((item) => ({ name: item.name || item.ProductName, sku: item.id || item.ProductID, units: item.quantity || item.Quantity, selling_price: item.price || item.Price })), payment_method: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid', sub_total: Number(order.GrandTotal), length: 20, breadth: 15, height: 10, weight: order.weight || env.shippingWeightKg });
 const orderToDelhivery = (order) => ({ name: order.shippingAddress?.name, add: order.shippingAddress?.addressLine, pin: order.shippingAddress?.pincode, city: order.shippingAddress?.city, state: order.shippingAddress?.state, country: 'India', phone: order.shippingAddress?.phone, order: order.OrderNumber, payment_mode: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid', total_amount: order.GrandTotal, products_desc: (order.items || []).map((item) => item.name || item.ProductName).join(', '), weight: Math.round((order.weight || env.shippingWeightKg) * 1000) });
@@ -150,7 +191,7 @@ export async function retryPendingShipments() {
   retryRunning = true;
   try {
     const pending = (await getRows('SHIPMENTS'))
-      .filter((row) => row.Status === 'Retry Pending')
+      .filter((row) => row.ShippingStatus === 'Retry Pending')
       .sort((a, b) => String(a.UpdatedAt).localeCompare(String(b.UpdatedAt)))
       .slice(0, 5);
     if (!pending.length) return;

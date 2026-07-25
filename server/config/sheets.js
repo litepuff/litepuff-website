@@ -19,7 +19,7 @@ export const SHEET_SCHEMAS = Object.freeze({
   CART: ['CartID', 'CustomerID', 'ProductID', 'Quantity', 'AddedAt', 'UpdatedAt'],
   WISHLIST: ['WishlistID', 'CustomerID', 'ProductID', 'CreatedAt'],
   ADDRESSES: ['AddressID', 'CustomerID', 'FullName', 'Phone', 'AddressLine1', 'AddressLine2', 'Landmark', 'City', 'State', 'Pincode', 'Country', 'AddressType', 'IsDefault', 'CreatedAt'],
-  ORDERS: ['OrderID', 'OrderNumber', 'CustomerID', 'AddressID', 'Subtotal', 'ProductDiscount', 'FirstOrderDiscount', 'CouponDiscount', 'Shipping', 'Discount', 'Tax', 'GrandTotal', 'CouponCode', 'PaymentMethod', 'PaymentStatus', 'OrderStatus', 'TrackingNumber', 'EstimatedDelivery', 'CreatedAt', 'UpdatedAt'],
+  ORDERS: ['OrderID', 'OrderNumber', 'CustomerID', 'AddressID', 'Subtotal', 'ProductDiscount', 'FirstOrderDiscount', 'CouponDiscount', 'Shipping', 'Discount', 'Tax', 'GrandTotal', 'CouponCode', 'PaymentMethod', 'PaymentStatus', 'OrderStatus', 'TrackingNumber', 'EstimatedDelivery', 'CreatedAt', 'UpdatedAt', 'ShippingProvider', 'ShipmentID', 'AWBNumber', 'CourierName', 'TrackingURL', 'ShippingStatus', 'PickupStatus', 'LabelURL', 'ManifestURL', 'ShippingCreatedAt', 'ShippingUpdatedAt'],
   ORDER_ITEMS: ['OrderItemID', 'OrderID', 'ProductID', 'ProductName', 'Price', 'Quantity', 'Total'],
   PAYMENTS: ['PaymentID', 'OrderID', 'CustomerID', 'RazorpayOrderID', 'RazorpayPaymentID', 'RazorpaySignature', 'PaymentMethod', 'Amount', 'Currency', 'Status', 'PaidAt', 'TransactionReference', 'Gateway', 'Remarks'],
   ORDER_TRACKING: ['TrackingID', 'OrderID', 'CurrentStatus', 'UpdatedBy', 'Remarks', 'UpdatedAt', 'EstimatedDeliveryDate'],
@@ -31,7 +31,7 @@ export const SHEET_SCHEMAS = Object.freeze({
   CONTACT_MESSAGES: ['MessageID', 'Name', 'Email', 'Phone', 'Subject', 'Message', 'CreatedAt', 'Status'],
   NEWSLETTER: ['SubscriberID', 'Email', 'SubscribedAt', 'Status'],
   SETTINGS: ['SettingID', 'Key', 'Value', 'Type', 'UpdatedAt'],
-  SHIPMENTS: ['ShipmentID', 'OrderID', 'Provider', 'ProviderShipmentID', 'AWB', 'Courier', 'Cost', 'EstimatedDays', 'LabelURL', 'Status', 'TrackingURL', 'CreatedAt', 'UpdatedAt'],
+  SHIPMENTS: ['ShipmentID', 'OrderID', 'Provider', 'ProviderShipmentID', 'AWBNumber', 'CourierName', 'ShippingCharge', 'EstimatedDays', 'LabelURL', 'ShippingStatus', 'TrackingURL', 'CreatedAt', 'UpdatedAt', 'TrackingNumber', 'PickupStatus', 'PackageWeight', 'PackageLength', 'PackageWidth', 'PackageHeight', 'EstimatedDelivery', 'ManifestURL'],
   NOTIFICATIONS: ['NotificationID', 'CustomerID', 'OrderID', 'Channel', 'Type', 'Status', 'ProviderID', 'SentAt', 'Error', 'Title', 'Message', 'DeepLink', 'IsRead', 'CreatedAt', 'ReadAt', 'Attempts', 'NextAttemptAt', 'Metadata'],
   AUTH_AUDIT: ['AuditID', 'FirebaseUID', 'CustomerID', 'Event', 'IPHash', 'UserAgent', 'CreatedAt', 'ActorID', 'ActorRole', 'Permission', 'Resource', 'Action', 'Decision', 'RequestID', 'Metadata'],
   SESSIONS: ['SessionID', 'CustomerID', 'Role', 'RefreshTokenHash', 'Status', 'CreatedAt', 'LastActivity', 'ExpiresAt', 'UserAgent', 'IPAddress', 'TerminatedAt', 'TerminationReason', 'TrustedAt'],
@@ -80,5 +80,14 @@ export const SHEET_DEPENDENCIES = Object.freeze({
   ADDRESSES: [['ORDERS', 'AddressID']], ORDERS: [['ORDER_ITEMS', 'OrderID'], ['PAYMENTS', 'OrderID'], ['ORDER_TRACKING', 'OrderID'], ['SHIPMENTS', 'OrderID'], ['REVIEWS', 'OrderID']]
 });
 
-export const COLUMN_ALIASES = Object.freeze({ PAYMENTS: { RazorpayPaymentID: ['TransactionID'] }, CUSTOMERS: { Provider: ['GoogleAuth'] } });
+export const COLUMN_ALIASES = Object.freeze({
+  PAYMENTS: { RazorpayPaymentID: ['TransactionID'] },
+  CUSTOMERS: { Provider: ['GoogleAuth'] },
+  SHIPMENTS: {
+    AWBNumber: ['AWB'],
+    CourierName: ['Courier'],
+    ShippingCharge: ['Cost'],
+    ShippingStatus: ['Status']
+  }
+});
 export const REQUIRED_SHEETS = Object.freeze(['PRODUCTS', 'INVENTORY', 'ORDERS', 'CUSTOMERS', 'COUPONS', 'BLOGS', 'NEWSLETTER', 'SETTINGS', 'SESSIONS', 'OTP_CHALLENGES', 'IDENTITY_VERIFICATIONS', 'WHATSAPP_CONVERSATIONS', 'WHATSAPP_SESSIONS', 'WHATSAPP_MESSAGES', 'WHATSAPP_CAMPAIGNS', 'WHATSAPP_TEMPLATES']);

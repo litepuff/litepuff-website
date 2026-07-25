@@ -25,6 +25,8 @@ import {
   notifyPaymentFailure,
   notifyPaymentSuccess,
 } from "../services/paymentNotificationService.js";
+import { createShipment } from "../services/shippingService.js";
+import { logger } from "../utils/logger.js";
 
 export const createPaymentValidators = [
   body("address").isObject(),
@@ -158,6 +160,20 @@ async function finalizePayment({
       "PAYMENTS",
       (row) => row.PaymentID === payment.PaymentID,
     );
+    await createShipment({
+      ...order,
+      shippingAddress: {
+        name: snapshot.address.fullName,
+        phone: snapshot.address.phone,
+        addressLine: [snapshot.address.addressLine1, snapshot.address.addressLine2, snapshot.address.landmark].filter(Boolean).join(", "),
+        city: snapshot.address.city,
+        state: snapshot.address.state,
+        pincode: snapshot.address.pincode,
+      },
+      items: snapshot.items,
+    }, "delhivery").catch((error) => {
+      logger.error("shipping.automatic.failed", { orderId: order.OrderID, code: error.code || "DELHIVERY_CREATE_FAILED", error: error.message });
+    });
     await notifyPaymentSuccess(order, saved).catch(() => {});
     return { order, payment: saved, replay: false };
   });
