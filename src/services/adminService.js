@@ -41,7 +41,7 @@ export const adminService = {
     const response = await apiClient.get('/admin/newsletter/export', { responseType: 'blob' });
     return response.data;
   },
-  createShipment: async (orderId) => unwrap(await apiClient.post(`/admin/orders/${orderId}/shipment`, { provider: 'delhivery' })),
+  createShipment: async (orderId) => unwrap(await apiClient.post(`/admin/orders/${orderId}/shipment`, {})),
   requestRefund: async (orderId) => unwrap(await apiClient.post(`/admin/payments/${orderId}/refund`)),
   payment: async (id) => unwrap(await apiClient.get(`/admin/payments/${id}`)),
   exportReport: async (type, params = {}) => {

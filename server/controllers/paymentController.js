@@ -25,7 +25,10 @@ import {
   notifyPaymentFailure,
   notifyPaymentSuccess,
 } from "../services/paymentNotificationService.js";
-import { createShipment } from "../services/shippingService.js";
+import {
+  createShipment,
+  preferredShippingProvider,
+} from "../services/shippingService.js";
 import { logger } from "../utils/logger.js";
 
 export const createPaymentValidators = [
@@ -54,6 +57,76 @@ const remarks = (value) => {
   }
 };
 const encodeRemarks = (value) => JSON.stringify(value).slice(0, 20_000);
+
+const scheduleBackgroundTask = (taskName, task, context = {}) => {
+  setImmediate(() => {
+    const startedAt = Date.now();
+    logger.info("background.task.started", { task: taskName, ...context });
+    Promise.resolve()
+      .then(task)
+      .then(() =>
+        logger.info("background.task.completed", {
+          task: taskName,
+          durationMs: Date.now() - startedAt,
+          ...context,
+        }),
+      )
+      .catch((error) =>
+        logger.error("background.task.failed", {
+          task: taskName,
+          durationMs: Date.now() - startedAt,
+          code: error?.code,
+          error: error?.message || String(error),
+          ...context,
+        }),
+      );
+  });
+};
+
+const schedulePostPaymentTasks = ({
+  order,
+  payment,
+  snapshot,
+  correlationId,
+}) => {
+  const context = {
+    correlationId: correlationId || order.OrderID,
+    orderId: order.OrderID,
+    paymentId: payment.PaymentID,
+  };
+  const shippingAddress = {
+    name: snapshot.address.fullName,
+    phone: snapshot.address.phone,
+    addressLine: [
+      snapshot.address.addressLine1,
+      snapshot.address.addressLine2,
+      snapshot.address.landmark,
+    ]
+      .filter(Boolean)
+      .join(", "),
+    city: snapshot.address.city,
+    state: snapshot.address.state,
+    pincode: snapshot.address.pincode,
+  };
+
+  scheduleBackgroundTask(
+    "shipment.create",
+    () =>
+      createShipment(
+        { ...order, shippingAddress, items: snapshot.items },
+        preferredShippingProvider(),
+        context,
+      ),
+    context,
+  );
+  scheduleBackgroundTask(
+    "notification.payment-success",
+    () => notifyPaymentSuccess(order, payment, context),
+    context,
+  );
+
+  // Future optional Meta CAPI execution belongs here so it cannot delay payment.
+};
 
 function publicPayment(row) {
   return {
@@ -94,8 +167,15 @@ async function finalizePayment({
   razorpayPaymentId,
   razorpaySignature,
   gatewayPayment,
+  correlationId,
 }) {
   return withPaymentLock(paymentId, async () => {
+    logger.info("payment.finalization.started", {
+      correlationId,
+      paymentId,
+      razorpayOrderId,
+      razorpayPaymentId,
+    });
     const payment = await findRow(
       "PAYMENTS",
       (row) => row.PaymentID === paymentId,
@@ -111,6 +191,12 @@ async function finalizePayment({
       throw error;
     }
     if (payment.Status === "Paid" && payment.OrderID) {
+      logger.info("payment.finalization.replay", {
+        correlationId,
+        paymentId,
+        orderId: payment.OrderID,
+        razorpayPaymentId,
+      });
       const order = await findRow(
         "ORDERS",
         (row) => row.OrderID === payment.OrderID,
@@ -160,21 +246,18 @@ async function finalizePayment({
       "PAYMENTS",
       (row) => row.PaymentID === payment.PaymentID,
     );
-    await createShipment({
-      ...order,
-      shippingAddress: {
-        name: snapshot.address.fullName,
-        phone: snapshot.address.phone,
-        addressLine: [snapshot.address.addressLine1, snapshot.address.addressLine2, snapshot.address.landmark].filter(Boolean).join(", "),
-        city: snapshot.address.city,
-        state: snapshot.address.state,
-        pincode: snapshot.address.pincode,
-      },
-      items: snapshot.items,
-    }, "delhivery").catch((error) => {
-      logger.error("shipping.automatic.failed", { orderId: order.OrderID, code: error.code || "DELHIVERY_CREATE_FAILED", error: error.message });
+    logger.info("payment.finalization.durable", {
+      correlationId,
+      paymentId: saved.PaymentID,
+      orderId: order.OrderID,
+      razorpayPaymentId,
     });
-    await notifyPaymentSuccess(order, saved).catch(() => {});
+    schedulePostPaymentTasks({
+      order,
+      payment: saved,
+      snapshot,
+      correlationId,
+    });
     return { order, payment: saved, replay: false };
   });
 }
@@ -269,7 +352,20 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
   );
   const order = await materializeCashOnDeliveryOrder({ payment, snapshot });
   const saved = await findRow("PAYMENTS", (row) => row.PaymentID === paymentId);
-  await notifyPaymentSuccess(order, saved).catch(() => {});
+  scheduleBackgroundTask(
+    "notification.cash-on-delivery-success",
+    () =>
+      notifyPaymentSuccess(order, saved, {
+        correlationId: request.id,
+        orderId: order.OrderID,
+        paymentId: saved.PaymentID,
+      }),
+    {
+      correlationId: request.id,
+      orderId: order.OrderID,
+      paymentId: saved.PaymentID,
+    },
+  );
   created(
     response,
     { order, payment: publicPayment(saved) },
@@ -280,20 +376,46 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
 export function createCashOnDeliveryOrder(request, response) { return withCheckoutLock(request.customer.id, () => createCashOnDeliveryOrderUnlocked(request, response)); }
 
 export async function verifyPayment(request, response) {
-  if (!verifyRazorpaySignature(request.body))
+  logger.info("payment.verification.requested", {
+    correlationId: request.id,
+    paymentId: request.body.paymentId,
+    razorpayOrderId: request.body.razorpayOrderId,
+    razorpayPaymentId: request.body.razorpayPaymentId,
+  });
+  if (!verifyRazorpaySignature(request.body)) {
+    logger.warn("payment.verification.signature_rejected", {
+      correlationId: request.id,
+      paymentId: request.body.paymentId,
+      razorpayOrderId: request.body.razorpayOrderId,
+      razorpayPaymentId: request.body.razorpayPaymentId,
+    });
     return response
       .status(400)
       .json({
         success: false,
         message: "Payment signature verification failed.",
       });
+  }
   const gatewayPayment = await fetchRazorpayPayment(
     request.body.razorpayPaymentId,
   );
+  logger.info("payment.verification.gateway_validated", {
+    correlationId: request.id,
+    paymentId: request.body.paymentId,
+    razorpayPaymentId: request.body.razorpayPaymentId,
+    gatewayStatus: gatewayPayment.status,
+  });
   const result = await finalizePayment({
     ...request.body,
     customerId: request.customer.id,
     gatewayPayment,
+    correlationId: request.id,
+  });
+  logger.info("payment.verification.completed", {
+    correlationId: request.id,
+    paymentId: result.payment.PaymentID,
+    orderId: result.order?.OrderID,
+    replay: result.replay,
   });
   ok(
     response,
@@ -333,7 +455,16 @@ export async function recordPaymentFailure(request, response) {
       message: String(request.body.reason || "Payment failed").slice(0, 500),
     });
     await updateRow("PAYMENTS", payment._row, payment);
-    await notifyPaymentFailure(payment).catch(() => {});
+    const context = {
+      correlationId: request.id,
+      paymentId: payment.PaymentID,
+      razorpayPaymentId: payment.RazorpayPaymentID,
+    };
+    scheduleBackgroundTask(
+      "notification.payment-failure",
+      () => notifyPaymentFailure(payment, context),
+      context,
+    );
   }
   ok(
     response,
@@ -363,13 +494,23 @@ export async function getPayment(request, response) {
 }
 
 export async function paymentWebhook(request, response) {
+  logger.info("razorpay.webhook.received", {
+    correlationId: request.id,
+    bodyIsBuffer: Buffer.isBuffer(request.body),
+    hasSignature: Boolean(request.headers["x-razorpay-signature"]),
+  });
   if (
     !Buffer.isBuffer(request.body) ||
     !verifyWebhookSignature(
       request.body,
       request.headers["x-razorpay-signature"],
     )
-  )
+  ) {
+    logger.warn("razorpay.webhook.signature_rejected", {
+      correlationId: request.id,
+      bodyIsBuffer: Buffer.isBuffer(request.body),
+      hasSignature: Boolean(request.headers["x-razorpay-signature"]),
+    });
     return response
       .status(401)
       .json({
@@ -377,9 +518,18 @@ export async function paymentWebhook(request, response) {
         message: "Invalid webhook signature.",
         errors: [],
       });
+  }
   const event = JSON.parse(request.body.toString("utf8"));
   const entity =
     event.payload?.payment?.entity || event.payload?.refund?.entity;
+  const webhookContext = {
+    correlationId: request.id,
+    webhookEventId: event.id,
+    webhookEvent: event.event,
+    razorpayOrderId: entity?.order_id,
+    razorpayPaymentId: entity?.payment_id || entity?.id,
+  };
+  logger.info("razorpay.webhook.signature_validated", webhookContext);
   const payments = await getRows("PAYMENTS");
   const payment = payments.find(
     (row) =>
@@ -387,14 +537,26 @@ export async function paymentWebhook(request, response) {
       row.RazorpayPaymentID === entity?.payment_id ||
       row.RazorpayPaymentID === entity?.id,
   );
-  if (!payment)
+  if (!payment) {
+    logger.warn("razorpay.webhook.payment_not_found", webhookContext);
     return ok(response, { received: true }, "Webhook acknowledged.");
+  }
+  logger.info("razorpay.webhook.payment_matched", {
+    ...webhookContext,
+    paymentId: payment.PaymentID,
+    orderId: payment.OrderID,
+    paymentStatus: payment.Status,
+  });
   if (event.event === "payment.authorized" && payment.Status !== "Paid") {
     payment.Status = "Authorized";
     payment.RazorpayPaymentID = entity.id;
     payment.TransactionReference = entity.id;
     payment.PaymentMethod = entity.method || "";
     await updateRow("PAYMENTS", payment._row, payment);
+    logger.info("razorpay.webhook.payment_authorized", {
+      ...webhookContext,
+      paymentId: payment.PaymentID,
+    });
   }
   if (event.event === "payment.captured" && payment.Status !== "Paid") {
     const stored = remarks(payment.Remarks);
@@ -406,6 +568,14 @@ export async function paymentWebhook(request, response) {
       razorpayPaymentId: entity.id,
       razorpaySignature: request.headers["x-razorpay-signature"],
       gatewayPayment: entity,
+      correlationId: request.id,
+    });
+  } else if (event.event === "payment.captured") {
+    logger.info("razorpay.webhook.replay_ignored", {
+      ...webhookContext,
+      paymentId: payment.PaymentID,
+      orderId: payment.OrderID,
+      reason: "payment_already_paid",
     });
   }
   if (event.event === "payment.failed" && payment.Status !== "Paid") {
@@ -417,7 +587,24 @@ export async function paymentWebhook(request, response) {
       message: entity?.error_description || "Payment failed",
     });
     await updateRow("PAYMENTS", payment._row, payment);
-    await notifyPaymentFailure(payment).catch(() => {});
+    const context = {
+      ...webhookContext,
+      paymentId: payment.PaymentID,
+      orderId: payment.OrderID,
+    };
+    scheduleBackgroundTask(
+      "notification.webhook-payment-failure",
+      () => notifyPaymentFailure(payment, context),
+      context,
+    );
+    logger.info("razorpay.webhook.payment_failure_recorded", context);
+  } else if (event.event === "payment.failed") {
+    logger.info("razorpay.webhook.replay_ignored", {
+      ...webhookContext,
+      paymentId: payment.PaymentID,
+      orderId: payment.OrderID,
+      reason: "payment_already_paid",
+    });
   }
   if (event.event === "refund.processed") {
     payment.Status = "Refunded";
@@ -436,6 +623,16 @@ export async function paymentWebhook(request, response) {
       order.UpdatedAt = new Date().toISOString();
       await updateRow("ORDERS", order._row, order);
     }
+    logger.info("razorpay.webhook.refund_recorded", {
+      ...webhookContext,
+      paymentId: payment.PaymentID,
+      orderId: payment.OrderID,
+    });
   }
+  logger.info("razorpay.webhook.processed", {
+    ...webhookContext,
+    paymentId: payment.PaymentID,
+    orderId: payment.OrderID,
+  });
   ok(response, { received: true }, "Webhook processed.");
 }

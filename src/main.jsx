@@ -7,17 +7,20 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import { CartProvider } from './context/CartContext.jsx';
 import { CustomerAuthProvider } from './context/CustomerAuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
+import MetaPixelProvider from './analytics/MetaPixelProvider.jsx';
 import './assets/styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HelmetProvider>
       <BrowserRouter>
-        <AuthProvider>
-          <CustomerAuthProvider>
-            <ToastProvider><CartProvider><App /></CartProvider></ToastProvider>
-          </CustomerAuthProvider>
-        </AuthProvider>
+        <MetaPixelProvider>
+          <AuthProvider>
+            <CustomerAuthProvider>
+              <ToastProvider><CartProvider><App /></CartProvider></ToastProvider>
+            </CustomerAuthProvider>
+          </AuthProvider>
+        </MetaPixelProvider>
       </BrowserRouter>
     </HelmetProvider>
   </React.StrictMode>

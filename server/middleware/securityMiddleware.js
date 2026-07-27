@@ -60,12 +60,14 @@ export const securityStack = [
         scriptSrc: [
           "'self'",
           "https://checkout.razorpay.com",
+          "https://connect.facebook.net",
         ],
 
         connectSrc: [
           "'self'",
           "https://api.razorpay.com",
           "https://*.razorpay.com",
+          "https://www.facebook.com",
         ],
 
         frameSrc: [
@@ -79,6 +81,7 @@ export const securityStack = [
           "data:",
           "blob:",
           "https://*.razorpay.com",
+          "https://www.facebook.com",
         ],
 
         styleSrc: [

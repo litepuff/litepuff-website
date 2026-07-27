@@ -6,15 +6,15 @@ import { fail } from '../utils/apiResponse.js';
 export function createVerifyMetaSignature(config = whatsAppConfig) {
   return function verifySignature(request, response, next) {
   if (!config.metaAppSecret) {
-    logger.error('whatsapp.webhook.signature-disabled');
+    logger.error('whatsapp.webhook.signature-disabled', { correlationId: request.id });
     return fail(response, 'WhatsApp webhook is not configured.', 503, {}, 'WHATSAPP_WEBHOOK_DISABLED');
   }
   const signature = request.get('x-hub-signature-256');
   if (!signature || !verifyWebhookSignature(request.body, signature, config.metaAppSecret)) {
-    logger.warn('whatsapp.webhook.signature-rejected', { signaturePresent: Boolean(signature) });
+    logger.warn('whatsapp.webhook.signature-rejected', { correlationId: request.id, signaturePresent: Boolean(signature) });
     return fail(response, 'Invalid webhook signature.', 401, {}, 'WHATSAPP_SIGNATURE_INVALID');
   }
-  logger.info('whatsapp.webhook.signature-verified');
+  logger.info('whatsapp.webhook.signature-verified', { correlationId: request.id });
   next();
   };
 }
