@@ -21,7 +21,7 @@ export class WhatsAppConfig {
     this.whatsappTimeoutMs = Number(source.WHATSAPP_TIMEOUT_MS || 10000);
     this.whatsappMaxRetries = Number(source.WHATSAPP_MAX_RETRIES || 2);
     this.whatsappSessionTimeoutMinutes = Number(source.WHATSAPP_SESSION_TIMEOUT_MINUTES || 30);
-    this.whatsappTemplateLanguage = clean(source.WHATSAPP_TEMPLATE_LANGUAGE) || 'en_US';
+    this.whatsappTemplateLanguage = clean(source.WHATSAPP_TEMPLATE_LANGUAGE) || 'en';
     this.whatsappAuthTemplate = clean(source.WHATSAPP_OTP_TEMPLATE || source.WHATSAPP_AUTH_TEMPLATE);
     this.whatsappOrderTemplate = clean(source.ORDER_CONFIRMED_TEMPLATE || source.WHATSAPP_ORDER_TEMPLATE);
     this.whatsappShippingTemplate = clean(source.ORDER_SHIPPED_TEMPLATE || source.WHATSAPP_SHIPPING_TEMPLATE);
