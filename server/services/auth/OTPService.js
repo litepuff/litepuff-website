@@ -20,8 +20,19 @@ export class OTPService {
     await this.cleanupExpired();
     const now = this.clock(); const active = await this.activeFor(identifier, provider, purpose);
     const requestWindowMinutes = Number(this.config.otpRequestWindowMinutes || 10);
-    const { rows: recent } = await this.sheets.readRows(SHEET_NAMES.OTP_CHALLENGES, { filter: (row) => row.Identifier === identifier && row.Provider === provider && row.Purpose === purpose && now - time(row.CreatedAt) < requestWindowMinutes * 60_000 });
-    if (recent.length >= this.config.otpMaxResends + 1) throw new AppError('OTP request limit reached.', { status: 429, code: 'OTP_GENERATION_LIMIT' });
+    const requestWindowMs = requestWindowMinutes * 60_000;
+    const { rows: recent } = await this.sheets.readRows(SHEET_NAMES.OTP_CHALLENGES, { filter: (row) => row.Identifier === identifier && row.Provider === provider && row.Purpose === purpose && now - time(row.CreatedAt) < requestWindowMs });
+    if (recent.length >= this.config.otpMaxResends + 1) {
+      const resetAt = Math.min(...recent.map((row) => time(row.CreatedAt))) + requestWindowMs;
+      throw new AppError('Too many OTP requests.', {
+        status: 429,
+        code: 'OTP_GENERATION_LIMIT',
+        details: {
+          retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+          retryAt: new Date(resetAt).toISOString()
+        }
+      });
+    }
     const latest = active[0];
     if (latest && now - time(latest.LastSentAt) < this.config.otpCooldownSeconds * 1000) throw new AppError('Please wait before requesting another OTP.', { status: 429, code: 'OTP_COOLDOWN', details: { retryAfterSeconds: Math.ceil((this.config.otpCooldownSeconds * 1000 - (now - time(latest.LastSentAt))) / 1000) } });
     await Promise.all(active.map((row) => this.invalidate(row, 'superseded')));

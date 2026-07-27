@@ -1,10 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FiArrowLeft,
   FiCheck,
   FiLoader,
-  FiLock,
-  FiMail,
   FiMessageCircle,
 } from "react-icons/fi";
 import { customerService, apiMessage } from "../../services/customerService";
@@ -22,6 +20,9 @@ const countryCodes = [
 ];
 const phoneDigits = (value) => value.replace(/\D/g, "");
 const isPhone = (value) => /^\+[1-9]\d{7,14}$/.test(value);
+const OTP_LIMIT_CODES = new Set(["OTP_GENERATION_LIMIT", "OTP_REQUEST_RATE_LIMIT"]);
+const formatCountdown = (seconds) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 
 export default function PasswordlessAuth({ onComplete }) {
   const { completeAuthentication } = useCustomerAuth();
@@ -31,12 +32,33 @@ export default function PasswordlessAuth({ onComplete }) {
   const [challenge, setChallenge] = useState(null);
   const [digits, setDigits] = useState(Array(6).fill(""));
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
+  const [rateLimitUntil, setRateLimitUntil] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const refs = useRef([]);
+  const phoneMode = !identifier || /^[+\d\s().-]*$/.test(identifier);
+
+  useEffect(() => {
+    if (!rateLimitUntil) {
+      setRemainingSeconds(0);
+      return undefined;
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((rateLimitUntil - Date.now()) / 1000));
+      setRemainingSeconds(remaining);
+      if (!remaining) setRateLimitUntil(0);
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [rateLimitUntil]);
 
   const submitIdentifier = async (event) => {
     event.preventDefault();
+    if (remainingSeconds > 0) return;
     setError("");
+    setSuccess("");
     const emailIdentifier = isEmail(identifier);
     const normalizedIdentifier = emailIdentifier
       ? identifier.trim().toLowerCase()
@@ -49,10 +71,17 @@ export default function PasswordlessAuth({ onComplete }) {
     try {
       const result = await customerService.beginOtp(normalizedIdentifier);
       setChallenge({ ...result, identifier: normalizedIdentifier });
+      setSuccess("Verification code sent to your WhatsApp.");
       setStep("otp");
       setTimeout(() => refs.current[0]?.focus(), 100);
     } catch (err) {
-      setError(apiMessage(err));
+      const code = err.response?.data?.code;
+      if (OTP_LIMIT_CODES.has(code)) {
+        const retryAfter = Math.max(1, Number(err.response?.data?.details?.retryAfterSeconds) || 600);
+        setRateLimitUntil(Date.now() + retryAfter * 1000);
+      } else {
+        setError(apiMessage(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -106,8 +135,9 @@ export default function PasswordlessAuth({ onComplete }) {
             setChallenge(null);
             setDigits(Array(6).fill(""));
             setError("");
+            setSuccess("");
           }}
-          className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#5B5F59]"
+          className="mb-5 inline-flex items-center gap-2 rounded-lg text-sm font-semibold text-[#5B5F59] outline-none transition hover:text-[#1E4D3A] focus-visible:ring-2 focus-visible:ring-[#1E4D3A] focus-visible:ring-offset-4"
         >
           <FiArrowLeft /> Change details
         </button>
@@ -120,34 +150,70 @@ export default function PasswordlessAuth({ onComplete }) {
           >
             Email address or WhatsApp number
           </label>
-          <div className="mt-2 grid grid-cols-[118px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[#DED8CC] bg-[#FCFBF8] focus-within:border-[#1E4D3A] focus-within:ring-4 focus-within:ring-[#1E4D3A]/10">
-            <select
-              value={countryCode}
-              onChange={(event) => setCountryCode(event.target.value)}
-              aria-label="Phone country code"
-              className="h-14 border-r border-[#DED8CC] bg-transparent px-3 text-sm font-semibold outline-none"
-            >
-              {countryCodes.map(([country, code]) => (
-                <option key={`${country}-${code}`} value={code}>{code} {country}</option>
-              ))}
-            </select>
-            <div className="flex min-w-0 items-center px-4">
-            <FiMail className="mr-3 shrink-0 text-[#9A7B3F]" />
+          <div className="mt-2 flex min-w-0 overflow-hidden rounded-2xl border border-[#DED8CC] bg-white shadow-sm transition focus-within:border-[#1E4D3A] focus-within:ring-4 focus-within:ring-[#1E4D3A]/10">
+            {phoneMode && (
+              <select
+                value={countryCode}
+                onChange={(event) => setCountryCode(event.target.value)}
+                aria-label="Phone country code"
+                className="h-14 w-[76px] shrink-0 cursor-pointer border-0 border-r border-[#E8E3D9] bg-[#FAF8F2] px-2 text-sm font-semibold text-[#243029] outline-none sm:w-[82px]"
+              >
+                {countryCodes.map(([country, code]) => (
+                  <option key={`${country}-${code}`} value={code}>{code} — {country}</option>
+                ))}
+              </select>
+            )}
             <input
               id="login-identifier"
               autoFocus
               autoComplete="username"
-              inputMode={identifier.includes("@") ? "email" : "text"}
+              inputMode={phoneMode ? "tel" : "email"}
               value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setIdentifier(value);
+                if (value.trim().startsWith("+")) {
+                  const match = [...countryCodes]
+                    .sort((a, b) => b[1].length - a[1].length)
+                    .find(([, code]) => value.trim().startsWith(code));
+                  if (match) setCountryCode(match[1]);
+                }
+              }}
               placeholder="Enter your email or WhatsApp number"
-              className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#969B97]"
+              aria-describedby={[
+                error ? "login-identifier-error" : "",
+                remainingSeconds ? "otp-rate-limit-message" : "",
+              ].filter(Boolean).join(" ") || undefined}
+              aria-invalid={Boolean(error)}
+              className="h-14 min-w-0 flex-1 border-0 bg-transparent px-4 text-base text-[#243029] outline-none placeholder:text-[#969B97]"
             />
-            </div>
           </div>
+          {error && (
+            <p id="login-identifier-error" role="alert" className="mt-2 text-sm text-[#A33D34]">
+              <span aria-hidden="true">⚠ </span>{error}
+            </p>
+          )}
+          {remainingSeconds > 0 && (
+            <div
+              id="otp-rate-limit-message"
+              role="status"
+              aria-live="polite"
+              className="mt-4 rounded-2xl border border-[#E9D8D3] bg-[#FFF9F7] p-4 text-left"
+            >
+              <h2 className="font-display text-lg font-semibold text-[#613B35]">Too Many OTP Requests</h2>
+              <p className="mt-1 text-sm leading-6 text-[#79564F]">
+                For your security, you&apos;ve requested the verification code several times.
+                Please wait 10 minutes before requesting another OTP. We appreciate your patience.
+              </p>
+              <p className="mt-3 font-mono text-xl font-semibold tabular-nums text-[#1E4D3A]" aria-label={`${remainingSeconds} seconds remaining`}>
+                {formatCountdown(remainingSeconds)}
+              </p>
+            </div>
+          )}
           <button
-            disabled={busy}
-            className="mt-5 flex h-14 w-full items-center justify-center rounded-full bg-[#1E4D3A] font-bold text-white transition hover:bg-[#2C614A] active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy || remainingSeconds > 0}
+            aria-disabled={busy || remainingSeconds > 0}
+            className="mt-5 flex h-14 w-full items-center justify-center rounded-full bg-[#1E4D3A] font-bold text-white shadow-[0_10px_24px_rgba(30,77,58,.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#2C614A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4D3A] focus-visible:ring-offset-4 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             {busy ? (
               <FiLoader className="animate-spin" aria-label="Signing in" />
@@ -167,6 +233,11 @@ export default function PasswordlessAuth({ onComplete }) {
             We&apos;ve sent a 6-digit verification code to your registered
             WhatsApp number. Enter it below to continue securely.
           </p>
+          {success && (
+            <p role="status" aria-live="polite" className="mt-4 text-sm font-medium text-[#287A50]">
+              <span aria-hidden="true">✓ </span>{success}
+            </p>
+          )}
           <div
             className="mt-6 grid w-full grid-cols-6 gap-1.5 sm:gap-2"
             onPaste={paste}
@@ -220,16 +291,16 @@ export default function PasswordlessAuth({ onComplete }) {
           </p>
         </div>
       )}
-      {error && (
+      {error && step !== "identifier" && (
         <p
           role="alert"
-          className="mt-4 rounded-2xl bg-[#FFF0EC] p-3 text-sm text-[#9A392F]"
+          className="mt-4 text-center text-sm text-[#A33D34]"
         >
-          {error}
+          <span aria-hidden="true">⚠ </span>{error}
         </p>
       )}
-      <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-[#7B817D]">
-        <FiLock /> Your information is securely protected.
+      <p className="mt-6 text-center text-xs text-[#7B817D]">
+        Your information is securely protected.
       </p>
     </div>
   );

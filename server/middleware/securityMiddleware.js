@@ -1,6 +1,7 @@
 import helmet from "helmet";
 import compression from "compression";
-import rateLimit from "express-rate-limit";
+import crypto from "crypto";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import sanitizeHtml from "sanitize-html";
 import { AppError } from "../utils/AppError.js";
 
@@ -160,6 +161,24 @@ export const apiLimiter = rateLimit({
 export const otpRequestLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 30,
+  keyGenerator(req) {
+    const rawIdentifier =
+      req.body?.phone ||
+      req.body?.email ||
+      req.body?.identifier;
+    if (!rawIdentifier) return `ip:${ipKeyGenerator(req.ip)}`;
+    const value = String(rawIdentifier).trim();
+    const normalized = value.includes("@")
+      ? value.toLowerCase()
+      : value
+          .replace(/[\s().-]/g, "")
+          .replace(/^00/, "+")
+          .replace(/^(?!\+)/, "+");
+    return `identifier:${crypto
+      .createHash("sha256")
+      .update(normalized)
+      .digest("hex")}`;
+  },
   standardHeaders: true,
   legacyHeaders: false,
   handler(req, res) {
@@ -167,6 +186,7 @@ export const otpRequestLimiter = rateLimit({
       success: false,
       code: "OTP_REQUEST_RATE_LIMIT",
       error: "Too many verification-code requests. Please wait 10 minutes.",
+      details: { retryAfterSeconds: 600 },
     });
   },
 });
