@@ -11,9 +11,9 @@ import { verifyWebhookSignature } from '../utils/WebhookValidator.js';
 const source = (overrides = {}) => ({
   WHATSAPP_ACCESS_TOKEN: 'access', WHATSAPP_PHONE_NUMBER_ID: 'phone-id', WHATSAPP_BUSINESS_ACCOUNT_ID: 'business-id',
   WHATSAPP_VERIFY_TOKEN: 'verify-value', META_APP_ID: 'app-id', META_APP_SECRET: 'app-secret', META_API_VERSION: 'v23.0',
-  WHATSAPP_OTP_TEMPLATE: 'litepuff_authentication', ORDER_CONFIRMED_TEMPLATE: 'litepuff_order_confirmation',
-  ORDER_SHIPPED_TEMPLATE: 'litepuff_shipping_update', ORDER_DELIVERED_TEMPLATE: 'litepuff_delivered',
-  PAYMENT_SUCCESS_TEMPLATE: 'litepuff_payment_success', PAYMENT_FAILED_TEMPLATE: 'litepuff_payment_failed',
+  WHATSAPP_OTP_TEMPLATE: 'otp_verification', ORDER_CONFIRMED_TEMPLATE: 'order_confirmed',
+  ORDER_SHIPPED_TEMPLATE: 'order_shipped', ORDER_DELIVERED_TEMPLATE: 'order_delivered',
+  PAYMENT_SUCCESS_TEMPLATE: 'payment_success', PAYMENT_FAILED_TEMPLATE: 'payment_failed',
   WHATSAPP_TIMEOUT_MS: '1000', WHATSAPP_MAX_RETRIES: '2', WHATSAPP_TEMPLATE_LANGUAGE: 'en_US', ...overrides
 });
 const silent = { info() {}, warn() {}, error() {} };
@@ -22,6 +22,12 @@ test('WhatsApp configuration validates required and invalid values without throw
   const valid = new WhatsAppConfig(source());
   assert.equal(valid.configured, true);
   assert.equal(valid.publicState().reason, null);
+  assert.equal(valid.whatsappAuthTemplate, 'otp_verification');
+  assert.equal(valid.whatsappOrderTemplate, 'order_confirmed');
+  assert.equal(valid.whatsappShippingTemplate, 'order_shipped');
+  assert.equal(valid.whatsappDeliveredTemplate, 'order_delivered');
+  assert.equal(valid.whatsappPaymentSuccessTemplate, 'payment_success');
+  assert.equal(valid.whatsappPaymentFailedTemplate, 'payment_failed');
   const missing = new WhatsAppConfig({});
   assert.equal(missing.configured, false);
   assert.ok(missing.validation.missing.includes('WHATSAPP_VERIFY_TOKEN'));

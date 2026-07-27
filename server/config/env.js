@@ -20,7 +20,11 @@ export const env = {
   accessTokenMinutes: Number(process.env.ACCESS_TOKEN_MINUTES || 15),
   refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS || 30),
   otpSecret: process.env.OTP_SECRET || '',
-  otpExpiresMinutes: Number(process.env.OTP_EXPIRES_MINUTES || 5),
+  otpExpiresMinutes: Number(
+    process.env.WHATSAPP_OTP_EXPIRY_MINUTES ||
+      process.env.OTP_EXPIRES_MINUTES ||
+      5
+  ),
   otpCooldownSeconds: Number(process.env.OTP_COOLDOWN_SECONDS || 30),
   otpMaxAttempts: Number(process.env.OTP_MAX_ATTEMPTS || 5),
   otpMaxResends: Number(process.env.OTP_MAX_RESENDS || 4),
