@@ -22,6 +22,7 @@ export class WhatsAppConfig {
     this.whatsappMaxRetries = Number(source.WHATSAPP_MAX_RETRIES || 2);
     this.whatsappSessionTimeoutMinutes = Number(source.WHATSAPP_SESSION_TIMEOUT_MINUTES || 30);
     this.whatsappTemplateLanguage = clean(source.WHATSAPP_TEMPLATE_LANGUAGE) || 'en';
+    this.whatsappAuthTemplateLanguage = clean(source.WHATSAPP_OTP_TEMPLATE_LANGUAGE) || this.whatsappTemplateLanguage;
     this.whatsappAuthTemplate = clean(source.WHATSAPP_OTP_TEMPLATE || source.WHATSAPP_AUTH_TEMPLATE);
     this.whatsappOrderTemplate = clean(source.ORDER_CONFIRMED_TEMPLATE || source.WHATSAPP_ORDER_TEMPLATE);
     this.whatsappShippingTemplate = clean(source.ORDER_SHIPPED_TEMPLATE || source.WHATSAPP_SHIPPING_TEMPLATE);
@@ -58,6 +59,7 @@ export class WhatsAppConfig {
     if (!Number.isInteger(this.whatsappMaxRetries) || this.whatsappMaxRetries < 0) invalid.push('WHATSAPP_MAX_RETRIES');
     if (!Number.isFinite(this.whatsappSessionTimeoutMinutes) || this.whatsappSessionTimeoutMinutes <= 0) invalid.push('WHATSAPP_SESSION_TIMEOUT_MINUTES');
     if (!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(this.whatsappTemplateLanguage)) invalid.push('WHATSAPP_TEMPLATE_LANGUAGE');
+    if (!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(this.whatsappAuthTemplateLanguage)) invalid.push('WHATSAPP_OTP_TEMPLATE_LANGUAGE');
     const errors = [
       ...missing.map((key) => `Missing ${key}`),
       ...invalid.map((key) => `Invalid ${key}`)

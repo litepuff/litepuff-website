@@ -12,7 +12,7 @@ export class WhatsAppTemplateService {
   constructor({ config = whatsAppConfig, validator = templateValidator } = {}) {
     this.config = config; this.validator = validator;
     this.registry = Object.freeze({
-      authentication: { name: config.whatsappAuthTemplate, required: ['code', 'expiresMinutes'], button: ['code'] },
+      authentication: { name: config.whatsappAuthTemplate, required: ['code'], button: ['code'] },
       welcome: { name: config.whatsappWelcomeTemplate, required: ['firstName'] },
       order_confirmation: { name: config.whatsappOrderTemplate, required: ['orderNumber', 'total'] },
       payment_success: { name: config.whatsappPaymentSuccessTemplate, required: ['orderNumber', 'amount'] },

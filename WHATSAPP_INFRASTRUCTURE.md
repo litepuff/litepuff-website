@@ -38,7 +38,8 @@ Configuration with production-safe defaults:
 META_API_VERSION=v23.0
 WHATSAPP_TIMEOUT_MS=10000
 WHATSAPP_MAX_RETRIES=2
-WHATSAPP_TEMPLATE_LANGUAGE=en_US
+WHATSAPP_TEMPLATE_LANGUAGE=en
+WHATSAPP_OTP_TEMPLATE_LANGUAGE=en
 ```
 
 The verify token is a private, high-entropy value chosen by LitePuff. Enter the identical value in Hostinger and Meta. `META_APP_SECRET` is the App Secret from Meta App Settings. Never commit either value.

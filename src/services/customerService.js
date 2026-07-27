@@ -27,15 +27,31 @@ async function beginOtp(identifier) {
   }
 }
 
-async function verifyOtp(challenge, otp) {
-  const identity = String(challenge.identifier || '').includes('@')
+async function requestOtp({ provider, purpose, identifier }) {
+  const normalized = provider === 'email'
+    ? String(identifier || '').trim().toLowerCase()
+    : String(identifier || '').trim();
+  const identity = provider === 'email' ? { email: normalized } : { phone: normalized };
+  return payload(await customerApi.post(`/auth/${provider}/${purpose}`, identity));
+}
+
+async function verifyOtp(challenge, otp, profile = {}) {
+  const provider = challenge.provider || 'whatsapp';
+  const identity = provider === 'email'
     ? { email: challenge.identifier }
     : { phone: challenge.identifier };
-  return payload(await customerApi.post('/auth/whatsapp/verify-otp', { ...identity, otpId: challenge.otpId, purpose: challenge.purpose, otp }));
+  return payload(await customerApi.post(`/auth/${provider}/verify-otp`, {
+    ...identity,
+    ...profile,
+    otpId: challenge.otpId,
+    purpose: challenge.purpose,
+    otp
+  }));
 }
 
 export const customerService = {
   beginOtp,
+  requestOtp,
   verifyOtp,
   resendOtp: (challenge) => customerApi.post(`/auth/${challenge.provider}/resend`, { otpId: challenge.otpId, purpose: challenge.purpose, ...(challenge.provider === 'email' ? { email: challenge.identifier } : { phone: challenge.identifier }) }).then(payload),
   me: () => customerApi.get('/auth/me').then(payload),

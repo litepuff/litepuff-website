@@ -19,11 +19,18 @@ export class AuthService {
   async requestEmailOtp({ email, purpose }) {
     const identifier = validateEmail(email); if (!Object.values(OTP_PURPOSES).includes(purpose)) throw new AppError('OTP purpose is invalid.', { status: 422, code: 'VALIDATION_ERROR', details: { field: 'purpose' } });
     const existing = await this.customers.findByEmail(identifier);
+    logger.info('auth.customer.lookup', { identifierType: 'email', provider: OTP_PROVIDERS.EMAIL, purpose, customerFound: Boolean(existing), customerId: existing?.CustomerID });
     if (purpose === OTP_PURPOSES.SIGNUP && existing) throw new AppError('An account with this email already exists.', { status: 409, code: 'DUPLICATE_CUSTOMER' });
     if (purpose === OTP_PURPOSES.LOGIN) { if (!existing) throw new AppError('Customer account was not found.', { status: 404, code: 'CUSTOMER_NOT_FOUND' }); await this.customers.requireActive(existing.CustomerID); }
     const challenge = await this.otps.create({ identifier, provider: OTP_PROVIDERS.EMAIL, purpose, customerId: existing?.CustomerID || '' });
     try { const delivery = await this.emailProvider.send({ identifier, code: challenge.code, purpose }); await this.otps.recordDelivery(challenge.record.OTPID, { status: OTP_DELIVERY_STATUSES.SENT, providerMessageId: delivery.providerMessageId }); }
-    catch (error) { await this.otps.recordDelivery(challenge.record.OTPID, { status: OTP_DELIVERY_STATUSES.FAILED }); await this.otps.invalidate(challenge.record.OTPID, 'delivery-failed'); throw error; }
+    catch (error) {
+      await this.otps.recordDelivery(challenge.record.OTPID, { status: OTP_DELIVERY_STATUSES.FAILED });
+      await this.otps.invalidate(challenge.record.OTPID, 'delivery-failed');
+      if (purpose === OTP_PURPOSES.LOGIN && existing?.Phone) error.details = { ...(error.details || {}), alternateProvider: OTP_PROVIDERS.WHATSAPP };
+      logger.warn('auth.otp.delivery-fallback-available', { provider: OTP_PROVIDERS.EMAIL, fallbackProvider: existing?.Phone ? OTP_PROVIDERS.WHATSAPP : undefined, customerId: existing?.CustomerID });
+      throw error;
+    }
     return { otpId: challenge.record.OTPID, purpose, provider: OTP_PROVIDERS.EMAIL, destination: maskEmail(identifier), expiresAt: challenge.record.ExpiresAt };
   }
   signup(input) { return this.requestEmailOtp({ ...input, purpose: OTP_PURPOSES.SIGNUP }); }
@@ -56,11 +63,18 @@ export class AuthService {
     if (loginEmail && !existing) throw new AppError('Customer account was not found.', { status: 404, code: 'CUSTOMER_NOT_FOUND' });
     if (loginEmail && !identifier) throw new AppError('No verified WhatsApp number is registered for this account.', { status: 409, code: 'WHATSAPP_PHONE_REQUIRED' });
     existing ||= await this.customers.findByPhone(identifier);
+    logger.info('auth.customer.lookup', { identifierType: loginEmail ? 'email' : 'phone', provider: OTP_PROVIDERS.WHATSAPP, purpose, customerFound: Boolean(existing), customerId: existing?.CustomerID });
     if (purpose === OTP_PURPOSES.SIGNUP && existing) throw new AppError('An account with this phone number already exists.', { status: 409, code: 'DUPLICATE_CUSTOMER' });
     if (purpose === OTP_PURPOSES.LOGIN) { if (!existing) throw new AppError('Customer account was not found.', { status: 404, code: 'CUSTOMER_NOT_FOUND' }); await this.customers.requireActive(existing.CustomerID); }
     const challenge = await this.otps.create({ identifier, provider: OTP_PROVIDERS.WHATSAPP, purpose, customerId: existing?.CustomerID || '' });
     try { const delivery = await this.whatsAppProvider.send({ identifier, code: challenge.code, purpose }); await this.otps.recordDelivery(challenge.record.OTPID, { status: OTP_DELIVERY_STATUSES.SENT, providerMessageId: delivery.providerMessageId }); }
-    catch (error) { await this.otps.recordDelivery(challenge.record.OTPID, { status: OTP_DELIVERY_STATUSES.FAILED }); await this.otps.invalidate(challenge.record.OTPID, 'delivery-failed'); throw error; }
+    catch (error) {
+      await this.otps.recordDelivery(challenge.record.OTPID, { status: OTP_DELIVERY_STATUSES.FAILED });
+      await this.otps.invalidate(challenge.record.OTPID, 'delivery-failed');
+      if (purpose === OTP_PURPOSES.LOGIN && existing?.Email) error.details = { ...(error.details || {}), alternateProvider: OTP_PROVIDERS.EMAIL };
+      logger.warn('auth.otp.delivery-fallback-available', { provider: OTP_PROVIDERS.WHATSAPP, fallbackProvider: existing?.Email ? OTP_PROVIDERS.EMAIL : undefined, customerId: existing?.CustomerID });
+      throw error;
+    }
     return { otpId: challenge.record.OTPID, purpose, provider: OTP_PROVIDERS.WHATSAPP, destination: maskPhone(identifier), expiresAt: challenge.record.ExpiresAt };
   }
   signupWhatsApp(input) { return this.requestWhatsAppOtp({ ...input, purpose: OTP_PURPOSES.SIGNUP }); }

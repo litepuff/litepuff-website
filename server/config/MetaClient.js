@@ -21,13 +21,22 @@ function logOutgoingRequest({ config, path, options }) {
   const template = message?.template || {};
   const body = template.components?.find((component) => component.type === 'body');
   const button = template.components?.find((component) => component.type === 'button');
+  const authentication = template.name === config.whatsappAuthTemplate;
+  const loggedMessage = typeof message === 'object' ? structuredClone(message) : message;
+  if (authentication) {
+    for (const component of loggedMessage.template?.components || []) {
+      for (const parameter of component.parameters || []) {
+        if ('text' in parameter) parameter.text = '[REDACTED_AUTH_CODE]';
+      }
+    }
+  }
   console.info('========== OUTGOING WHATSAPP REQUEST ==========');
-  console.info(JSON.stringify(message, null, 2));
+  console.info(JSON.stringify(loggedMessage, null, 2));
   console.info(`Phone Number ID: ${config.whatsappPhoneNumberId}`);
   console.info(`Meta API Version: ${config.metaApiVersion}`);
   console.info(`Template: ${template.name || '[not a template request]'}`);
   console.info(`Language: ${template.language?.code || '[not a template request]'}`);
-  console.info(`Recipient: ${message?.to || '[missing]'}`);
+  console.info(`Recipient: ${message?.to ? `***${String(message.to).slice(-4)}` : '[missing]'}`);
   console.info(`Authorization: ${maskToken(config.whatsappAccessToken)}`);
   console.info(`WHATSAPP_OTP_TEMPLATE: ${config.whatsappAuthTemplate || '[missing]'}`);
   console.info(`WHATSAPP_TEMPLATE_LANGUAGE: ${config.whatsappTemplateLanguage || '[missing]'}`);
@@ -35,11 +44,11 @@ function logOutgoingRequest({ config, path, options }) {
   console.info(`WHATSAPP_BUSINESS_ACCOUNT_ID: ${config.whatsappBusinessAccountId || '[missing]'}`);
   console.info(`Resolved Template: ${template.name || '[not a template request]'}`);
   console.info(`Resolved Language: ${template.language?.code || '[not a template request]'}`);
-  console.info(`Resolved Parameters: ${JSON.stringify(body?.parameters?.map((parameter) => parameter.text) || [])}`);
-  console.info(`Resolved Button Parameters: ${JSON.stringify(button?.parameters?.map((parameter) => parameter.text) || [])}`);
-  if (template.name === config.whatsappAuthTemplate) {
+  console.info(`Resolved Parameter Count: ${body?.parameters?.length || 0}`);
+  console.info(`Resolved Button Parameter Count: ${button?.parameters?.length || 0}`);
+  if (authentication) {
     const issues = [];
-    if (template.language?.code !== config.whatsappTemplateLanguage) issues.push('Resolved language differs from WHATSAPP_TEMPLATE_LANGUAGE.');
+    if (template.language?.code !== (config.whatsappAuthTemplateLanguage || config.whatsappTemplateLanguage)) issues.push('Resolved language differs from the configured Authentication template language.');
     if (body?.type !== 'body') issues.push('Authentication template requires a body component.');
     if ((body?.parameters?.length || 0) !== 1) issues.push(`Approved Authentication template expects 1 body parameter, but the request contains ${body?.parameters?.length || 0}.`);
     if (button?.type !== 'button' || button?.sub_type !== 'url' || String(button?.index) !== '0') issues.push('Authentication copy-code button must be button/url/index 0.');
