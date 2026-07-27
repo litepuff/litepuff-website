@@ -46,9 +46,16 @@ export class AuthService {
     } else throw new AppError('OTP purpose is invalid.', { status: 422, code: 'VALIDATION_ERROR', details: { field: 'purpose' } });
     const tokens = await this.sessions.createSession(customer, metadata); return { tokens, customer: this.customers.publicIdentity(customer), session: { id: tokens.sessionId, expiresAt: tokens.expiresAt } };
   }
-  async requestWhatsAppOtp({ phone, purpose }) {
-    const identifier = normalizePhoneE164(phone); if (!Object.values(OTP_PURPOSES).includes(purpose)) throw new AppError('OTP purpose is invalid.', { status: 422, code: 'VALIDATION_ERROR', details: { field: 'purpose' } });
-    const existing = await this.customers.findByPhone(identifier);
+  async requestWhatsAppOtp({ phone, email = '', purpose }) {
+    const loginEmail = email ? validateEmail(email) : '';
+    let existing = loginEmail ? await this.customers.findByEmail(loginEmail) : null;
+    const identifier = loginEmail
+      ? (existing?.Phone ? normalizePhoneE164(existing.Phone) : '')
+      : normalizePhoneE164(phone);
+    if (!Object.values(OTP_PURPOSES).includes(purpose)) throw new AppError('OTP purpose is invalid.', { status: 422, code: 'VALIDATION_ERROR', details: { field: 'purpose' } });
+    if (loginEmail && !existing) throw new AppError('Customer account was not found.', { status: 404, code: 'CUSTOMER_NOT_FOUND' });
+    if (loginEmail && !identifier) throw new AppError('No verified WhatsApp number is registered for this account.', { status: 409, code: 'WHATSAPP_PHONE_REQUIRED' });
+    existing ||= await this.customers.findByPhone(identifier);
     if (purpose === OTP_PURPOSES.SIGNUP && existing) throw new AppError('An account with this phone number already exists.', { status: 409, code: 'DUPLICATE_CUSTOMER' });
     if (purpose === OTP_PURPOSES.LOGIN) { if (!existing) throw new AppError('Customer account was not found.', { status: 404, code: 'CUSTOMER_NOT_FOUND' }); await this.customers.requireActive(existing.CustomerID); }
     const challenge = await this.otps.create({ identifier, provider: OTP_PROVIDERS.WHATSAPP, purpose, customerId: existing?.CustomerID || '' });
@@ -65,7 +72,12 @@ export class AuthService {
     return { otpId, purpose, provider: OTP_PROVIDERS.WHATSAPP, destination: maskPhone(identifier), expiresAt: challenge.record.ExpiresAt, resendCount: challenge.record.ResendCount };
   }
   async verifyWhatsAppOtp({ otpId, phone, otp, purpose, firstName = '', lastName = '', email = '', marketingConsent = false }, metadata = {}) {
-    const identifier = normalizePhoneE164(phone); const code = validateOtp(otp); await this.otps.verify({ otpId: String(otpId || ''), identifier, provider: OTP_PROVIDERS.WHATSAPP, purpose, code });
+    const loginEmail = !phone && email ? validateEmail(email) : '';
+    const resolvedCustomer = loginEmail ? await this.customers.findByEmail(loginEmail) : null;
+    if (loginEmail && !resolvedCustomer) throw new AppError('Customer account was not found.', { status: 404, code: 'CUSTOMER_NOT_FOUND' });
+    if (loginEmail && !resolvedCustomer.Phone) throw new AppError('No verified WhatsApp number is registered for this account.', { status: 409, code: 'WHATSAPP_PHONE_REQUIRED' });
+    const identifier = loginEmail ? normalizePhoneE164(resolvedCustomer?.Phone) : normalizePhoneE164(phone);
+    const code = validateOtp(otp); await this.otps.verify({ otpId: String(otpId || ''), identifier, provider: OTP_PROVIDERS.WHATSAPP, purpose, code });
     let customer = await this.customers.findByPhone(identifier);
     if (purpose === OTP_PURPOSES.SIGNUP) {
       if (customer) throw new AppError('An account with this phone number already exists.', { status: 409, code: 'DUPLICATE_CUSTOMER' });

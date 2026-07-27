@@ -157,26 +157,43 @@ export const apiLimiter = rateLimit({
    AUTH LIMITER
 ---------------------------------------------------------- */
 
-export const authLimiter = rateLimit({
+export const otpRequestLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-
-  max: 10,
-
-  skipSuccessfulRequests: true,
-
+  max: 30,
   standardHeaders: true,
-
   legacyHeaders: false,
-
   handler(req, res) {
     res.status(429).json({
       success: false,
-      code: "AUTH_RATE_LIMIT",
-      error:
-        "Too many login attempts. Please wait 10 minutes.",
+      code: "OTP_REQUEST_RATE_LIMIT",
+      error: "Too many verification-code requests. Please wait 10 minutes.",
     });
   },
 });
+
+export const otpVerificationLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler(req, res) {
+    res.status(429).json({
+      success: false,
+      code: "OTP_VERIFICATION_RATE_LIMIT",
+      error: "Too many verification attempts. Please wait 10 minutes.",
+    });
+  },
+});
+
+export const sessionLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Backward-compatible export for modules outside the customer OTP routes.
+export const authLimiter = sessionLimiter;
 
 /* ----------------------------------------------------------
    PAYMENT LIMITER

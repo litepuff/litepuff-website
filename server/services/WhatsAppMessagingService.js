@@ -21,15 +21,19 @@ export class WhatsAppMessagingService {
   async dispatch(type, payload) {
     this.validation.payload(payload);
     const delivery = this.deliveries.create(type);
+    const logContext = {
+      recipient: payload.to ? `***${String(payload.to).slice(-4)}` : undefined,
+      template: payload.template?.name || undefined
+    };
     return this.queue.enqueue(async () => {
       try {
         const { result, attempts } = await this.retries.execute(() => this.client.sendMessage(payload, { retries: 0 }), { deliveryId: delivery.deliveryId, onRetry: (attempt) => this.deliveries.markRetrying(delivery.deliveryId, attempt) });
         const sent = this.deliveries.markSent(delivery.deliveryId, result.messageId, attempts);
-        this.log.info('whatsapp.message.sent', { deliveryId: delivery.deliveryId, messageType: type, attempts });
+        this.log.info('whatsapp.message.sent', { deliveryId: delivery.deliveryId, messageId: result.messageId, messageType: type, status: sent.status, attempts, ...logContext });
         return { deliveryId: delivery.deliveryId, messageId: result.messageId, status: sent.status, queuedAt: sent.queuedAt, sentAt: sent.sentAt, attempts };
       } catch (error) {
         const failed = this.deliveries.markFailed(delivery.deliveryId, error, error.deliveryAttempts || this.deliveries.get(delivery.deliveryId)?.attempts || 1);
-        this.log.error('whatsapp.message.failed', { deliveryId: delivery.deliveryId, messageType: type, code: error.code || 'WHATSAPP_DELIVERY_FAILED', attempts: failed?.attempts });
+        this.log.error('whatsapp.message.failed', { deliveryId: delivery.deliveryId, messageType: type, code: error.code || 'WHATSAPP_DELIVERY_FAILED', attempts: failed?.attempts, ...logContext });
         throw error;
       }
     }, { type });

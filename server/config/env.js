@@ -20,10 +20,11 @@ export const env = {
   accessTokenMinutes: Number(process.env.ACCESS_TOKEN_MINUTES || 15),
   refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS || 30),
   otpSecret: process.env.OTP_SECRET || '',
-  otpExpiresMinutes: Number(process.env.OTP_EXPIRES_MINUTES || 10),
-  otpCooldownSeconds: Number(process.env.OTP_COOLDOWN_SECONDS || 60),
+  otpExpiresMinutes: Number(process.env.OTP_EXPIRES_MINUTES || 5),
+  otpCooldownSeconds: Number(process.env.OTP_COOLDOWN_SECONDS || 30),
   otpMaxAttempts: Number(process.env.OTP_MAX_ATTEMPTS || 5),
-  otpMaxResends: Number(process.env.OTP_MAX_RESENDS || 3),
+  otpMaxResends: Number(process.env.OTP_MAX_RESENDS || 4),
+  otpRequestWindowMinutes: Number(process.env.OTP_REQUEST_WINDOW_MINUTES || 10),
   otpLockMinutes: Number(process.env.OTP_LOCK_MINUTES || 15),
   otpCleanupIntervalMinutes: Number(process.env.OTP_CLEANUP_INTERVAL_MINUTES || 5),
   adminSpreadsheetId: normalizeEnvironmentValue(
@@ -86,5 +87,5 @@ export function validateProductionEnv() {
   if (env.nodeEnv === 'production') { const invalidUrls = Object.entries({ FRONTEND_URL: env.clientUrl, BACKEND_URL: env.backendUrl, APP_URL: env.appUrl }).filter(([, value]) => !/^https:\/\//i.test(value) || /localhost|127\.0\.0\.1/i.test(value)).map(([key]) => key); if (invalidUrls.length) throw new Error(`Production URLs must use public HTTPS origins: ${invalidUrls.join(', ')}`); }
   if (!Number.isFinite(env.accessTokenMinutes) || env.accessTokenMinutes <= 0) throw new Error('ACCESS_TOKEN_MINUTES must be a positive number.');
   if (!Number.isFinite(env.refreshTokenDays) || env.refreshTokenDays <= 0) throw new Error('REFRESH_TOKEN_DAYS must be a positive number.');
-  if (![env.otpExpiresMinutes, env.otpCooldownSeconds, env.otpMaxAttempts, env.otpMaxResends, env.otpLockMinutes, env.otpCleanupIntervalMinutes].every((value) => Number.isFinite(value) && value > 0)) throw new Error('OTP policy values must be positive numbers.');
+  if (![env.otpExpiresMinutes, env.otpCooldownSeconds, env.otpMaxAttempts, env.otpMaxResends, env.otpRequestWindowMinutes, env.otpLockMinutes, env.otpCleanupIntervalMinutes].every((value) => Number.isFinite(value) && value > 0)) throw new Error('OTP policy values must be positive numbers.');
 }

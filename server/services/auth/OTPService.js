@@ -19,7 +19,8 @@ export class OTPService {
   async create({ identifier, provider, purpose, customerId = '' }) {
     await this.cleanupExpired();
     const now = this.clock(); const active = await this.activeFor(identifier, provider, purpose);
-    const { rows: recent } = await this.sheets.readRows(SHEET_NAMES.OTP_CHALLENGES, { filter: (row) => row.Identifier === identifier && row.Provider === provider && row.Purpose === purpose && now - time(row.CreatedAt) < this.config.otpLockMinutes * 60_000 });
+    const requestWindowMinutes = Number(this.config.otpRequestWindowMinutes || 10);
+    const { rows: recent } = await this.sheets.readRows(SHEET_NAMES.OTP_CHALLENGES, { filter: (row) => row.Identifier === identifier && row.Provider === provider && row.Purpose === purpose && now - time(row.CreatedAt) < requestWindowMinutes * 60_000 });
     if (recent.length >= this.config.otpMaxResends + 1) throw new AppError('OTP request limit reached.', { status: 429, code: 'OTP_GENERATION_LIMIT' });
     const latest = active[0];
     if (latest && now - time(latest.LastSentAt) < this.config.otpCooldownSeconds * 1000) throw new AppError('Please wait before requesting another OTP.', { status: 429, code: 'OTP_COOLDOWN', details: { retryAfterSeconds: Math.ceil((this.config.otpCooldownSeconds * 1000 - (now - time(latest.LastSentAt))) / 1000) } });
@@ -49,7 +50,7 @@ export class OTPService {
   async verify({ otpId, identifier, provider, purpose, code }) {
     const row = await this.requireUsable({ otpId, identifier, provider, purpose });
     if (!this.matches(code, row)) {
-      const attempts = number(row.Attempts) + 1; const locked = attempts >= this.config.otpMaxAttempts; const updated = { ...row, Attempts: attempts, Status: locked ? OTP_STATUSES.LOCKED : row.Status, LockedUntil: locked ? new Date(this.clock() + this.config.otpLockMinutes * 60_000).toISOString() : '' };
+      const attempts = number(row.Attempts) + 1; const locked = attempts >= this.config.otpMaxAttempts; const updated = { ...row, OTPHash: locked ? '' : row.OTPHash, Attempts: attempts, Status: locked ? OTP_STATUSES.INVALIDATED : row.Status, LockedUntil: '' };
       await this.sheets.update(SHEET_NAMES.OTP_CHALLENGES, row._row, updated); logger.warn('auth.otp.failed', { otpId, provider, purpose, attempts });
       throw new AppError(locked ? 'Too many incorrect attempts.' : 'OTP is incorrect.', { status: locked ? 429 : 401, code: locked ? 'OTP_ATTEMPTS_EXCEEDED' : 'OTP_INCORRECT', details: { attemptsRemaining: Math.max(0, this.config.otpMaxAttempts - attempts) } });
     }

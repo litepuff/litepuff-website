@@ -2,6 +2,9 @@ import { appendRow, getRows, updateRow } from './googleSheets.js';
 import { sendMail, emailTemplates } from './emailService.js';
 import { createId } from '../utils/createId.js';
 import { logger } from '../utils/logger.js';
+import { whatsAppMessagingService } from './WhatsAppMessagingService.js';
+import { WHATSAPP_TEMPLATES } from './WhatsAppTemplateService.js';
+import { whatsAppConfig } from '../config/WhatsAppConfig.js';
 
 const now = () => new Date().toISOString();
 const typeLabel = (type) => String(type || 'Update').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -93,6 +96,42 @@ export class NotificationService {
     }
   }
 
+  async sendWhatsApp({ to, template, variables, customerId = '', orderId = '', type = 'transactional', correlationId }) {
+    if (!to || !whatsAppConfig.outboundConfigured) {
+      logger.info('notification.whatsapp.skipped', { correlationId, customerId, orderId, type, reason: !to ? 'recipient_missing' : 'configuration_incomplete' });
+      return { skipped: true };
+    }
+    const existing = (await getRows('NOTIFICATIONS')).find((row) =>
+      row.Channel === 'whatsapp' &&
+      row.CustomerID === customerId &&
+      row.OrderID === orderId &&
+      row.Type === type &&
+      !['failed'].includes(String(row.Status || '').toLowerCase())
+    );
+    if (existing) {
+      logger.info('notification.whatsapp.idempotent_existing', { correlationId, notificationId: existing.NotificationID, customerId, orderId, type, status: existing.Status });
+      return { skipped: true, duplicate: true, messageId: existing.ProviderID || '' };
+    }
+    const record = notificationRecord({
+      customerId, orderId, channel: 'whatsapp', type, status: 'queued',
+      title: typeLabel(type), message: typeLabel(type),
+      metadata: { to, template, variables }
+    });
+    await appendRow('NOTIFICATIONS', record);
+    try {
+      const result = await whatsAppMessagingService.sendTemplate({ to, template, variables });
+      const saved = (await getRows('NOTIFICATIONS')).find((row) => row.NotificationID === record.NotificationID);
+      if (saved) await updateRow('NOTIFICATIONS', saved._row, { ...saved, Status: result.status || 'sent', ProviderID: result.messageId || '', SentAt: now(), Attempts: Number(result.attempts || 1), Error: '', NextAttemptAt: '' });
+      logger.info('notification.whatsapp.sent', { correlationId, notificationId: record.NotificationID, customerId, orderId, type, template, messageId: result.messageId, status: result.status });
+      return result;
+    } catch (error) {
+      const saved = (await getRows('NOTIFICATIONS')).find((row) => row.NotificationID === record.NotificationID);
+      if (saved) await updateRow('NOTIFICATIONS', saved._row, { ...saved, Status: 'retry_pending', Error: error.code || error.message, Attempts: Number(error.deliveryAttempts || 1), NextAttemptAt: new Date(Date.now() + 60_000).toISOString() }).catch(() => {});
+      logger.warn('notification.whatsapp.deferred', { correlationId, notificationId: record.NotificationID, customerId, orderId, type, template, code: error.code || 'WHATSAPP_DELIVERY_FAILED' });
+      return { queuedForRetry: true };
+    }
+  }
+
   async orderStatus(order, status) {
     const customer = (await getRows('CUSTOMERS')).find((row) => row.CustomerID === order.CustomerID);
     const type = `order_${String(status).toLowerCase().replaceAll(' ', '_')}`;
@@ -101,6 +140,10 @@ export class NotificationService {
       this.createWebsite({ customerId: order.CustomerID, orderId: order.OrderID, type, title: `Order ${status}`, message, deepLink: `/account/orders/${order.OrderID}` })
     ];
     if (customer?.Email) tasks.push(this.sendEmail({ to: customer.Email, template: emailTemplates.orderStatus(order, status), customerId: order.CustomerID, orderId: order.OrderID, type }));
+    const normalizedStatus = String(status || '').toLowerCase();
+    if (customer?.Phone && normalizedStatus === 'confirmed') tasks.push(this.sendWhatsApp({ to: customer.Phone, template: WHATSAPP_TEMPLATES.ORDER_CONFIRMATION, variables: { orderNumber: order.OrderNumber || order.OrderID, total: order.GrandTotal }, customerId: order.CustomerID, orderId: order.OrderID, type }));
+    if (customer?.Phone && ['shipped', 'in transit', 'out for delivery'].includes(normalizedStatus) && order.TrackingURL) tasks.push(this.sendWhatsApp({ to: customer.Phone, template: WHATSAPP_TEMPLATES.ORDER_SHIPPED, variables: { orderNumber: order.OrderNumber || order.OrderID, status, trackingUrl: order.TrackingURL }, customerId: order.CustomerID, orderId: order.OrderID, type }));
+    if (customer?.Phone && normalizedStatus === 'delivered') tasks.push(this.sendWhatsApp({ to: customer.Phone, template: WHATSAPP_TEMPLATES.DELIVERED, variables: { orderNumber: order.OrderNumber || order.OrderID }, customerId: order.CustomerID, orderId: order.OrderID, type }));
     return Promise.allSettled(tasks);
   }
 }
@@ -119,7 +162,7 @@ export async function retryPendingNotifications() {
   try {
     const currentTime = Date.now();
     const pending = (await getRows('NOTIFICATIONS'))
-      .filter((row) => row.Channel === 'email' && row.Status === 'retry_pending' && Number(row.Attempts || 0) < 5 && new Date(row.NextAttemptAt || 0).getTime() <= currentTime)
+      .filter((row) => ['email', 'whatsapp'].includes(row.Channel) && row.Status === 'retry_pending' && Number(row.Attempts || 0) < 5 && new Date(row.NextAttemptAt || 0).getTime() <= currentTime)
       .sort((a, b) => String(a.NextAttemptAt).localeCompare(String(b.NextAttemptAt)))
       .slice(0, 10);
     logger.info('notification.retry.batch_started', { count: pending.length });
@@ -129,7 +172,9 @@ export async function retryPendingNotifications() {
       const attempts = Number(row.Attempts || 0) + 1;
       logger.info('notification.retry.attempt_started', { notificationId: row.NotificationID, orderId: row.OrderID, type: row.Type, attempt: attempts });
       try {
-        const result = await sendMail({ to: metadata.to, subject: metadata.subject || row.Title, html: metadata.html || `<p>${row.Message}</p>` });
+        const result = row.Channel === 'whatsapp'
+          ? await whatsAppMessagingService.sendTemplate({ to: metadata.to, template: metadata.template, variables: metadata.variables || {} })
+          : await sendMail({ to: metadata.to, subject: metadata.subject || row.Title, html: metadata.html || `<p>${row.Message}</p>` });
         await updateRow('NOTIFICATIONS', row._row, { ...row, Status: result?.skipped ? 'skipped' : 'sent', ProviderID: result?.id || result?.messageId || '', SentAt: now(), Error: '', Attempts: attempts, NextAttemptAt: '' });
         logger.info('notification.retry.attempt_completed', { notificationId: row.NotificationID, orderId: row.OrderID, type: row.Type, attempt: attempts, skipped: Boolean(result?.skipped) });
       } catch (error) {

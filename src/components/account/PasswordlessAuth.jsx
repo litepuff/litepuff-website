@@ -102,7 +102,7 @@ export default function PasswordlessAuth({ onComplete }) {
             className="block text-sm font-semibold text-[#243029]"
             htmlFor="login-identifier"
           >
-            Email address or mobile number
+            Email address or WhatsApp number
           </label>
           <div className="mt-2 flex h-14 items-center rounded-2xl border border-[#DED8CC] bg-[#FCFBF8] px-4 focus-within:border-[#1E4D3A] focus-within:ring-4 focus-within:ring-[#1E4D3A]/10">
             <FiMail className="mr-3 shrink-0 text-[#9A7B3F]" />
@@ -113,7 +113,7 @@ export default function PasswordlessAuth({ onComplete }) {
               inputMode="email"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="Enter your email or mobile number"
+              placeholder="Enter your email or WhatsApp number"
               className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#969B97]"
             />
           </div>
@@ -133,11 +133,11 @@ export default function PasswordlessAuth({ onComplete }) {
         <div className="min-w-0 text-center">
           <FiMessageCircle className="mx-auto text-[#C89B3C]" size={30} />
           <h2 className="mt-3 font-display text-3xl font-semibold">
-            Verify your account
+            Verify your WhatsApp number
           </h2>
           <p className="mt-2 break-words text-sm leading-6 text-[#68706B]">
-            We&apos;ve sent a 6-digit verification code to your registered email
-            or mobile number. Enter it below to continue securely.
+            We&apos;ve sent a 6-digit verification code to your registered
+            WhatsApp number. Enter it below to continue securely.
           </p>
           <div
             className="mt-6 grid w-full grid-cols-6 gap-1.5 sm:gap-2"

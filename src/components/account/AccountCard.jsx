@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FiEdit3, FiLogOut, FiX } from "react-icons/fi";
+import { FiCheckCircle, FiEdit3, FiLogOut, FiX } from "react-icons/fi";
 import FormField from "./FormField";
 import { apiMessage, customerService } from "../../services/customerService.js";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -171,6 +171,11 @@ export default function AccountCard({
               </div>
             ))}
           </dl>
+          <div className={`mt-5 flex items-center gap-2 rounded-2xl p-3 text-sm font-semibold ${customer.phoneVerified ? "bg-[#EAF3ED] text-[#1E4D3A]" : "bg-[#FFF5DF] text-[#7A5A1B]"}`}>
+            <FiCheckCircle />
+            {customer.phoneVerified ? "Verified WhatsApp" : "Verify WhatsApp Number"}
+            {customer.phone && <span className="ml-auto font-normal">{customer.phone}</span>}
+          </div>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <button
               type="button"

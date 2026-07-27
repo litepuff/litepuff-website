@@ -10,7 +10,10 @@ import { verifyWebhookSignature } from '../utils/WebhookValidator.js';
 
 const source = (overrides = {}) => ({
   WHATSAPP_ACCESS_TOKEN: 'access', WHATSAPP_PHONE_NUMBER_ID: 'phone-id', WHATSAPP_BUSINESS_ACCOUNT_ID: 'business-id',
-  WHATSAPP_VERIFY_TOKEN: 'verify-value', META_APP_SECRET: 'app-secret', META_API_VERSION: 'v23.0',
+  WHATSAPP_VERIFY_TOKEN: 'verify-value', META_APP_ID: 'app-id', META_APP_SECRET: 'app-secret', META_API_VERSION: 'v23.0',
+  WHATSAPP_OTP_TEMPLATE: 'litepuff_authentication', ORDER_CONFIRMED_TEMPLATE: 'litepuff_order_confirmation',
+  ORDER_SHIPPED_TEMPLATE: 'litepuff_shipping_update', ORDER_DELIVERED_TEMPLATE: 'litepuff_delivered',
+  PAYMENT_SUCCESS_TEMPLATE: 'litepuff_payment_success', PAYMENT_FAILED_TEMPLATE: 'litepuff_payment_failed',
   WHATSAPP_TIMEOUT_MS: '1000', WHATSAPP_MAX_RETRIES: '2', WHATSAPP_TEMPLATE_LANGUAGE: 'en_US', ...overrides
 });
 const silent = { info() {}, warn() {}, error() {} };

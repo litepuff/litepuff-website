@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getRows, updateRow, appendRow } from './googleSheets.js';
 import { logger } from '../utils/logger.js';
+import { notificationService } from './NotificationService.js';
 
 const STATUS_MAP = new Map([
   ['shipment created', { shipment: 'Shipment Created', order: 'Confirmed' }],
@@ -62,9 +63,10 @@ function nextOrderStatus(current, proposed) {
 }
 
 export class ShiprocketWebhookService {
-  constructor({ sheets = { getRows, updateRow, appendRow }, log = logger } = {}) {
+  constructor({ sheets = { getRows, updateRow, appendRow }, log = logger, notifier = null } = {}) {
     this.sheets = sheets;
     this.log = log;
+    this.notifier = notifier;
   }
 
   async process(payload, context = {}) {
@@ -148,6 +150,11 @@ export class ShiprocketWebhookService {
       UpdatedAt: event.timestamp,
       EstimatedDeliveryDate: order.EstimatedDelivery,
     });
+    if (!stale && event.status.order) {
+      this.notifier?.orderStatus(updatedOrder, updatedOrder.OrderStatus).catch((error) =>
+        this.log.warn('shipping.webhook.notification_failed', { ...context, orderId: order.OrderID, code: error.code || 'NOTIFICATION_FAILED' })
+      );
+    }
 
     this.log.info('shipping.webhook.processed', { ...context, orderId: order.OrderID, shipmentId: shipment.ShipmentID, providerShipmentId: updatedShipment.ProviderShipmentID, awb: updatedShipment.AWBNumber, webhookEventId: event.eventId, status: event.status.shipment, stale });
     if (event.status.shipment === 'Delivered') this.log.info('shipping.shipment.delivered', { ...context, orderId: order.OrderID, shipmentId: shipment.ShipmentID, providerShipmentId: updatedShipment.ProviderShipmentID, awb: updatedShipment.AWBNumber });
@@ -157,4 +164,4 @@ export class ShiprocketWebhookService {
   }
 }
 
-export const shiprocketWebhookService = new ShiprocketWebhookService();
+export const shiprocketWebhookService = new ShiprocketWebhookService({ notifier: notificationService });

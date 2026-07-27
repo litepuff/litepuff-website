@@ -18,20 +18,20 @@ customerApi.interceptors.response.use((response) => response, async (error) => {
 async function beginOtp(identifier) {
   const email = String(identifier || '').trim().toLowerCase();
   const isEmail = email.includes('@');
-  const channel = isEmail ? 'email' : 'whatsapp';
   const identity = isEmail ? { email } : { phone: String(identifier || '').trim() };
   try {
-    return payload(await customerApi.post(`/auth/${channel}/login`, identity));
+    return payload(await customerApi.post('/auth/whatsapp/login', identity));
   } catch (error) {
-    if (error.response?.data?.code !== 'CUSTOMER_NOT_FOUND') throw error;
-    return payload(await customerApi.post(`/auth/${channel}/signup`, identity));
+    if (isEmail || error.response?.data?.code !== 'CUSTOMER_NOT_FOUND') throw error;
+    return payload(await customerApi.post('/auth/whatsapp/signup', identity));
   }
 }
 
 async function verifyOtp(challenge, otp) {
-  const provider = challenge.provider === 'whatsapp' ? 'whatsapp' : 'email';
-  const identity = provider === 'email' ? { email: challenge.identifier } : { phone: challenge.identifier };
-  return payload(await customerApi.post(`/auth/${provider}/verify-otp`, { ...identity, otpId: challenge.otpId, purpose: challenge.purpose, otp }));
+  const identity = String(challenge.identifier || '').includes('@')
+    ? { email: challenge.identifier }
+    : { phone: challenge.identifier };
+  return payload(await customerApi.post('/auth/whatsapp/verify-otp', { ...identity, otpId: challenge.otpId, purpose: challenge.purpose, otp }));
 }
 
 export const customerService = {
