@@ -5,6 +5,66 @@ const RATE_CODES = new Set([4, 17, 32, 80007, 130429, 131048]);
 const TEMPLATE_CODES = new Set([132000, 132001, 132015, 132016]);
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+function parseBody(body) {
+  if (typeof body !== 'string') return body || {};
+  try { return JSON.parse(body); } catch { return body; }
+}
+
+function maskToken(token) {
+  const value = String(token || '');
+  return value ? `Bearer ********${value.slice(-4)}` : 'Bearer [NOT_CONFIGURED]';
+}
+
+function logOutgoingRequest({ config, path, options }) {
+  if (String(options.method || 'GET').toUpperCase() !== 'POST' || !path.endsWith('/messages')) return;
+  const message = parseBody(options.body);
+  const template = message?.template || {};
+  const body = template.components?.find((component) => component.type === 'body');
+  const button = template.components?.find((component) => component.type === 'button');
+  console.info('========== OUTGOING WHATSAPP REQUEST ==========');
+  console.info(JSON.stringify(message, null, 2));
+  console.info(`Phone Number ID: ${config.whatsappPhoneNumberId}`);
+  console.info(`Meta API Version: ${config.metaApiVersion}`);
+  console.info(`Template: ${template.name || '[not a template request]'}`);
+  console.info(`Language: ${template.language?.code || '[not a template request]'}`);
+  console.info(`Recipient: ${message?.to || '[missing]'}`);
+  console.info(`Authorization: ${maskToken(config.whatsappAccessToken)}`);
+  console.info(`WHATSAPP_OTP_TEMPLATE: ${config.whatsappAuthTemplate || '[missing]'}`);
+  console.info(`WHATSAPP_TEMPLATE_LANGUAGE: ${config.whatsappTemplateLanguage || '[missing]'}`);
+  console.info(`WHATSAPP_PHONE_NUMBER_ID: ${config.whatsappPhoneNumberId || '[missing]'}`);
+  console.info(`WHATSAPP_BUSINESS_ACCOUNT_ID: ${config.whatsappBusinessAccountId || '[missing]'}`);
+  console.info(`Resolved Template: ${template.name || '[not a template request]'}`);
+  console.info(`Resolved Language: ${template.language?.code || '[not a template request]'}`);
+  console.info(`Resolved Parameters: ${JSON.stringify(body?.parameters?.map((parameter) => parameter.text) || [])}`);
+  console.info(`Resolved Button Parameters: ${JSON.stringify(button?.parameters?.map((parameter) => parameter.text) || [])}`);
+  if (template.name === config.whatsappAuthTemplate) {
+    const issues = [];
+    if (template.language?.code !== config.whatsappTemplateLanguage) issues.push('Resolved language differs from WHATSAPP_TEMPLATE_LANGUAGE.');
+    if (body?.type !== 'body') issues.push('Authentication template requires a body component.');
+    if ((body?.parameters?.length || 0) !== 1) issues.push(`Approved Authentication template expects 1 body parameter, but the request contains ${body?.parameters?.length || 0}.`);
+    if (button?.type !== 'button' || button?.sub_type !== 'url' || String(button?.index) !== '0') issues.push('Authentication copy-code button must be button/url/index 0.');
+    if ((button?.parameters?.length || 0) !== 1) issues.push(`Authentication copy-code button expects 1 parameter, but the request contains ${button?.parameters?.length || 0}.`);
+    if (body?.parameters?.[0]?.text !== button?.parameters?.[0]?.text) issues.push('Body verification code and copy-code button value do not match.');
+    console.info(`Authentication Payload Audit: ${issues.length ? 'MISMATCH' : 'MATCH'}`);
+    issues.forEach((issue) => console.info(`Authentication Payload Issue: ${issue}`));
+  }
+  console.info('===============================================');
+}
+
+function logMetaError(response, payload, rawPayload) {
+  const meta = payload?.error || {};
+  console.error('========== META RESPONSE ==========');
+  console.error(rawPayload || JSON.stringify(payload, null, 2));
+  console.error(`Status Code: ${response.status}`);
+  console.error(`Meta Error Code: ${meta.code ?? '[missing]'}`);
+  console.error(`Meta Error Type: ${meta.type ?? '[missing]'}`);
+  console.error(`Meta Error Message: ${meta.message ?? '[missing]'}`);
+  console.error(`Meta Error Details: ${JSON.stringify(meta.error_data ?? meta.details ?? {})}`);
+  console.error(`Meta Error Subcode: ${meta.error_subcode ?? '[missing]'}`);
+  console.error(`FB Trace ID: ${meta.fbtrace_id ?? '[missing]'}`);
+  console.error('===================================');
+}
+
 function mapMetaError(metaCode, status) {
   if (metaCode === 190) return { status: 503, code: 'WHATSAPP_ACCESS_TOKEN_INVALID', message: 'WhatsApp authentication is unavailable.', retryable: false };
   if ([10, 200, 299].includes(metaCode) || status === 403) return { status: 403, code: 'WHATSAPP_PERMISSION_DENIED', message: 'WhatsApp request permission was denied.', retryable: false };
@@ -34,13 +94,25 @@ export class MetaClient {
     let lastError;
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
+        logOutgoingRequest({ config: this.config, path, options });
         const response = await this.request(this.endpoint(path), {
           ...options,
           headers: { Authorization: `Bearer ${this.config.whatsappAccessToken}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
           signal: AbortSignal.timeout(this.config.whatsappTimeoutMs)
         });
-        let payload = {}; try { payload = await response.json(); } catch {}
+        let payload = {};
+        let rawPayload = '';
+        try {
+          if (typeof response.text === 'function') {
+            rawPayload = await response.text();
+            payload = rawPayload ? JSON.parse(rawPayload) : {};
+          } else {
+            payload = await response.json();
+            rawPayload = JSON.stringify(payload);
+          }
+        } catch {}
         if (!response.ok) {
+          logMetaError(response, payload, rawPayload);
           const mapped = mapMetaError(Number(payload?.error?.code || 0), response.status);
           const error = new AppError(mapped.message, { status: mapped.status, code: mapped.code, details: { retryable: mapped.retryable, metaCode: Number(payload?.error?.code || 0) || undefined }, expose: true });
           if (!mapped.retryable || attempt >= retries) throw error;
