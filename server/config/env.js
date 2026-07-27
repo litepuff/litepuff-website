@@ -52,6 +52,9 @@ export const env = {
   businessAddress: process.env.BUSINESS_ADDRESS || '',
   shiprocketEmail: process.env.SHIPROCKET_EMAIL || '',
   shiprocketPassword: process.env.SHIPROCKET_PASSWORD || '',
+  shiprocketBaseUrl: normalizeEnvironmentValue(
+    process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external'
+  ).replace(/\/+$/, ''),
   shiprocketPickupLocation: process.env.SHIPROCKET_PICKUP_LOCATION || 'Primary',
   shiprocketWebhookToken: process.env.SHIPROCKET_WEBHOOK_TOKEN || '',
   delhiveryToken: process.env.DELHIVERY_TOKEN || process.env.DELHIVERY_API_TOKEN || '',

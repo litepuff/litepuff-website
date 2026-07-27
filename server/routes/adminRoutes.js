@@ -39,7 +39,7 @@ import {
 import { protectAdminRoute, requirePermission } from '../middleware/authMiddleware.js';
 import { activityLogger } from '../services/activityLogService.js';
 import { authLimiter } from '../middleware/securityMiddleware.js';
-import { adminCancelShipment, adminCreateShipment, adminTrackShipment } from '../controllers/shippingController.js';
+import { adminCancelShipment, adminCreateShipment, adminRecoverShipments, adminTrackShipment } from '../controllers/shippingController.js';
 import { PERMISSIONS } from '../config/auth.js';
 import adminWhatsAppRoutes from './adminWhatsAppRoutes.js';
 
@@ -68,6 +68,7 @@ router.put('/orders/:id/status', requirePermission(PERMISSIONS.ADMIN_ORDERS_MANA
 router.post('/orders/:orderId/shipment', requirePermission(PERMISSIONS.ADMIN_SHIPPING_MANAGE), activityLogger('Shipment Created', 'Shipping'), handle(adminCreateShipment));
 router.get('/orders/:orderId/shipment', requirePermission(PERMISSIONS.ADMIN_SHIPPING_MANAGE), handle(adminTrackShipment));
 router.delete('/orders/:orderId/shipment', requirePermission(PERMISSIONS.ADMIN_SHIPPING_MANAGE), activityLogger('Shipment Cancelled', 'Shipping'), handle(adminCancelShipment));
+router.post('/shipping/recover', requirePermission(PERMISSIONS.ADMIN_SHIPPING_MANAGE), activityLogger('Shipment Recovery Run', 'Shipping'), handle(adminRecoverShipments));
 
 router.get('/customers', requirePermission(PERMISSIONS.ADMIN_CUSTOMERS_READ), handle(getAdminCustomers));
 router.get('/customers/:id', requirePermission(PERMISSIONS.ADMIN_CUSTOMERS_READ), handle(getAdminCustomerById));

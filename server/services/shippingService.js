@@ -10,23 +10,83 @@ const logShippingActivity = (action, metadata) =>
 const shiprocketTrackingUrl = (awb) =>
   awb ? `https://shiprocket.co/tracking/${encodeURIComponent(awb)}` : '';
 
+const redactProviderPayload = (value, depth = 0) => {
+  if (depth > 6 || value == null) return value;
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => redactProviderPayload(item, depth + 1));
+  if (typeof value !== 'object') return typeof value === 'string' ? value.slice(0, 2_000) : value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    /token|password|secret|authorization|credential/i.test(key)
+      ? '[REDACTED]'
+      : redactProviderPayload(item, depth + 1)
+  ]));
+};
+
+const providerError = ({ url, response, payload }) => {
+  // Shiprocket sometimes reports an application error inside an HTTP 200 body.
+  const payloadStatus = Number(payload?.status_code || payload?.status);
+  const httpStatus = Number(response?.status || 0);
+  const status = httpStatus >= 400 ? httpStatus : (payloadStatus >= 400 ? payloadStatus : 502);
+  const message = payload?.message || payload?.error || payload?.errors?.message || 'Shipping provider request failed.';
+  const error = Object.assign(new Error(String(message)), {
+    status: 502,
+    providerStatus: status,
+    providerCode: payload?.code || payload?.error_code || payload?.status_code || '',
+    providerBody: redactProviderPayload(payload),
+    providerPath: (() => { try { return new URL(url).pathname; } catch { return ''; } })(),
+    retryable: status === 429 || status >= 500
+  });
+  return error;
+};
+
 const requestJson = async (url, options = {}, attempt = 0) => {
   try {
     const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15_000) });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if ((response.status === 429 || response.status >= 500) && attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, (500 * (2 ** attempt)) + Math.floor(Math.random() * 200)));
+    const embeddedStatus = Number(payload?.status_code || payload?.status);
+    const embeddedFailure = response.ok && embeddedStatus >= 400;
+    if (!response.ok || embeddedFailure) {
+      const error = providerError({ url, response, payload });
+      if (error.retryable && attempt < 2) {
+        const delayMs = (500 * (2 ** attempt)) + Math.floor(Math.random() * 200);
+        logger.warn('shiprocket.retry.scheduled', {
+          path: error.providerPath,
+          attempt: attempt + 1,
+          delayMs,
+          providerStatus: error.providerStatus,
+          providerCode: error.providerCode
+        });
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         return requestJson(url, options, attempt + 1);
       }
-      throw Object.assign(new Error(payload.message || payload.error || 'Shipping provider request failed.'), { status: 502, providerStatus: response.status });
+      if (error.retryable) logger.error('shiprocket.retry.exhausted', {
+        path: error.providerPath,
+        attempts: attempt + 1,
+        providerStatus: error.providerStatus,
+        providerCode: error.providerCode,
+        providerBody: error.providerBody
+      });
+      throw error;
     }
     return payload;
   } catch (error) {
     if (attempt < 2 && ['TimeoutError', 'TypeError'].includes(error.name)) {
-      await new Promise((resolve) => setTimeout(resolve, (500 * (2 ** attempt)) + Math.floor(Math.random() * 200)));
+      const delayMs = (500 * (2 ** attempt)) + Math.floor(Math.random() * 200);
+      logger.warn('shiprocket.retry.scheduled', {
+        path: (() => { try { return new URL(url).pathname; } catch { return ''; } })(),
+        attempt: attempt + 1,
+        delayMs,
+        reason: error.name
+      });
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
       return requestJson(url, options, attempt + 1);
     }
+    if (['TimeoutError', 'TypeError'].includes(error.name)) logger.error('shiprocket.retry.exhausted', {
+      path: (() => { try { return new URL(url).pathname; } catch { return ''; } })(),
+      attempts: attempt + 1,
+      reason: error.name,
+      error: error.message
+    });
     throw error;
   }
 };
@@ -34,17 +94,61 @@ const requestJson = async (url, options = {}, attempt = 0) => {
 export class ShiprocketProvider {
   name = 'shiprocket'; token = ''; expiresAt = 0;
   configured() { return Boolean(env.shiprocketEmail && env.shiprocketPassword); }
+  configurationErrors() {
+    const errors = [];
+    if (!env.shiprocketEmail) errors.push('SHIPROCKET_EMAIL is missing');
+    if (!env.shiprocketPassword) errors.push('SHIPROCKET_PASSWORD is missing');
+    if (!/^https:\/\/apiv2\.shiprocket\.in\/v1\/external$/i.test(env.shiprocketBaseUrl)) errors.push('SHIPROCKET_BASE_URL is invalid');
+    if (!/^\d{6}$/.test(String(env.shippingOriginPincode))) errors.push('SHIPPING_ORIGIN_PINCODE must contain exactly 6 digits');
+    if (!env.shiprocketPickupLocation || env.shiprocketPickupLocation.length > 50) errors.push('SHIPROCKET_PICKUP_LOCATION must be the Shiprocket pickup nickname');
+    if (!Number.isFinite(env.shippingWeightKg) || env.shippingWeightKg <= 0) errors.push('SHIPPING_DEFAULT_WEIGHT_KG must be positive');
+    return errors;
+  }
   async authenticate() {
     if (this.token && Date.now() < this.expiresAt) return this.token;
-    const data = await requestJson('https://apiv2.shiprocket.in/v1/external/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: env.shiprocketEmail, password: env.shiprocketPassword }) });
-    this.token = data.token; this.expiresAt = Date.now() + 8 * 24 * 60 * 60_000; return this.token;
+    const configurationErrors = this.configurationErrors().filter((message) => !message.startsWith('SHIPPING_') && !message.startsWith('SHIPROCKET_PICKUP'));
+    if (configurationErrors.length) throw Object.assign(new Error(configurationErrors.join('; ')), { code: 'SHIPROCKET_CONFIG_INVALID', retryable: false });
+    logger.info('shiprocket.login.started', { baseUrl: env.shiprocketBaseUrl });
+    try {
+      const data = await requestJson(`${env.shiprocketBaseUrl}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: env.shiprocketEmail, password: env.shiprocketPassword }) });
+      if (!data.token) throw Object.assign(new Error('Shiprocket login response did not include a token.'), { code: 'SHIPROCKET_TOKEN_MISSING', providerBody: redactProviderPayload(data), retryable: false });
+      this.token = data.token;
+      this.expiresAt = Date.now() + 8 * 24 * 60 * 60_000;
+      logger.info('shiprocket.login.succeeded', { accountId: data.id || null, companyId: data.company_id || null });
+      return this.token;
+    } catch (error) {
+      logger.error('shiprocket.login.failed', { providerStatus: error.providerStatus, providerCode: error.providerCode, providerBody: error.providerBody, error: error.message });
+      throw error;
+    }
   }
-  async call(path, options = {}) { return requestJson(`https://apiv2.shiprocket.in/v1/external${path}`, { ...options, headers: { Authorization: `Bearer ${await this.authenticate()}`, 'Content-Type': 'application/json', ...options.headers } }); }
+  async call(path, options = {}, authenticationRetry = 0) {
+    try {
+      return await requestJson(`${env.shiprocketBaseUrl}${path}`, { ...options, headers: { Authorization: `Bearer ${await this.authenticate()}`, 'Content-Type': 'application/json', ...options.headers } });
+    } catch (error) {
+      if (error.providerStatus === 401 && authenticationRetry === 0) {
+        this.token = '';
+        this.expiresAt = 0;
+        logger.warn('shiprocket.token.refreshing', { path });
+        return this.call(path, options, 1);
+      }
+      logger.error('shiprocket.api.failed', { path, providerStatus: error.providerStatus, providerCode: error.providerCode, providerBody: error.providerBody, retryable: Boolean(error.retryable), error: error.message });
+      throw error;
+    }
+  }
   async quote(input) {
+    const configurationErrors = this.configurationErrors();
+    if (configurationErrors.length) throw Object.assign(new Error(configurationErrors.join('; ')), { code: 'SHIPROCKET_CONFIG_INVALID', retryable: false });
     const data = await this.call(`/courier/serviceability/?pickup_postcode=${input.originPincode}&delivery_postcode=${input.destinationPincode}&weight=${input.weight}&cod=${input.cod ? 1 : 0}`);
     const courier = [...(data?.data?.available_courier_companies || [])].sort((a, b) => Number(a.freight_charge) - Number(b.freight_charge))[0];
-    if (!courier) throw new Error('Shiprocket has no serviceable courier.');
+    if (!courier) throw Object.assign(new Error(data?.message || 'Shiprocket has no serviceable courier.'), { code: 'SHIPROCKET_NOT_SERVICEABLE', providerBody: redactProviderPayload(data), retryable: false });
     return { provider: this.name, cost: Number(courier.freight_charge), estimatedDays: Number(courier.estimated_delivery_days || 99), courierId: courier.courier_company_id, courier: courier.courier_name };
+  }
+  async listOrders(page = 1, perPage = 100) {
+    const data = await this.call(`/orders?page=${page}&per_page=${perPage}`);
+    return {
+      orders: Array.isArray(data?.data?.data) ? data.data.data : Array.isArray(data?.data) ? data.data : Array.isArray(data?.orders) ? data.orders : [],
+      lastPage: Number(data?.data?.last_page || data?.meta?.last_page || page)
+    };
   }
   async findByExternalOrderId(orderNumber) {
     const data = await this.call(`/orders?search=${encodeURIComponent(orderNumber)}`);
@@ -110,7 +214,18 @@ export class ShiprocketProvider {
 
     if (!remote) {
       try {
-        const created = await this.call('/orders/create/adhoc', { method: 'POST', body: JSON.stringify(orderToShiprocket(order)) });
+        const payload = orderToShiprocket(order);
+        validateShiprocketOrderPayload(payload);
+        logger.info('shiprocket.order.payload.generated', {
+          orderId: order.OrderID,
+          orderNumber: order.OrderNumber,
+          pickupLocationConfigured: Boolean(payload.pickup_location),
+          itemCount: payload.order_items.length,
+          paymentMethod: payload.payment_method,
+          subTotal: payload.sub_total,
+          package: { length: payload.length, breadth: payload.breadth, height: payload.height, weight: payload.weight }
+        });
+        const created = await this.call('/orders/create/adhoc', { method: 'POST', body: JSON.stringify(payload) });
         remote = {
           providerOrderId: created.order_id,
           providerShipmentId: created.shipment_id,
@@ -118,6 +233,7 @@ export class ShiprocketProvider {
           courier: created.courier_name || quote.courier,
           status: created.status || 'Shipment Created'
         };
+        logger.info('shiprocket.order.created', { orderId: order.OrderID, orderNumber: order.OrderNumber, providerOrderId: remote.providerOrderId, providerShipmentId: remote.providerShipmentId });
       } catch (error) {
         remote = await this.findByExternalOrderId(order.OrderNumber).catch(() => null);
         if (!remote) throw Object.assign(error, { safeToFallback: false, code: error.code || 'SHIPROCKET_CREATE_AMBIGUOUS' });
@@ -253,6 +369,10 @@ async function createShipmentUnlocked(order, preferredProvider, context = {}) {
     const savedOrder = (await getRows('ORDERS')).find((row) => row.OrderID === order.OrderID);
     if (savedOrder) order = { ...savedOrder, ...order };
   }
+  if (!order.email && order.CustomerID) {
+    const customer = (await getRows('CUSTOMERS')).find((row) => row.CustomerID === order.CustomerID);
+    if (customer?.Email) order.email = customer.Email;
+  }
   let existing = (await getRows('SHIPMENTS')).find((row) => row.OrderID === order.OrderID);
   const shiprocketComplete = existing?.Provider === 'shiprocket' && existing.AWBNumber && existing.LabelURL && existing.ManifestURL && existing.PickupStatus && existing.PickupStatus !== 'Pending' && !['Failed', 'Retry Pending'].includes(existing.ShippingStatus);
   const otherProviderComplete = existing?.Provider !== 'shiprocket' && existing?.AWBNumber && !['Failed', 'Retry Pending'].includes(existing.ShippingStatus);
@@ -267,10 +387,21 @@ async function createShipmentUnlocked(order, preferredProvider, context = {}) {
     if (preferredProvider && !selected?.configured()) throw Object.assign(new Error('Selected shipping provider is not configured.'), { status: 503 });
     quote = selected ? await selected.quote(input) : await chooseCourier(input);
   } catch (error) {
-    if (preferredProvider === 'shiprocket' && shippingProviders.delhivery.configured()) {
+    if (preferredProvider === 'shiprocket' && context.allowFallback !== false && shippingProviders.delhivery.configured()) {
       preferredProvider = 'delhivery';
       quote = await shippingProviders.delhivery.quote(input);
-      logger.warn('shipping.provider.fallback', { ...context, orderId: order.OrderID, from: 'shiprocket', to: 'delhivery', code: error.code || 'SHIPROCKET_UNAVAILABLE' });
+      logger.warn('shipping.provider.fallback', {
+        ...context,
+        orderId: order.OrderID,
+        from: 'shiprocket',
+        to: 'delhivery',
+        code: error.code || 'SHIPROCKET_UNAVAILABLE',
+        providerStatus: error.providerStatus,
+        providerCode: error.providerCode,
+        providerBody: error.providerBody,
+        retryable: Boolean(error.retryable),
+        error: error.message
+      });
     } else {
     const failedAt = new Date().toISOString();
     const pending = pendingShipment(order, existing, preferredProvider, failedAt);
@@ -333,6 +464,174 @@ export function createShipment(order, preferredProvider, context = {}) {
   return operation;
 }
 
+let recoveryRunning = false;
+
+export async function recoverPendingShipments(options = {}, dependencies = {}) {
+  if (recoveryRunning) {
+    return {
+      recovered: [],
+      failed: [],
+      skipped: [{ orderId: '', orderNumber: '', reason: 'recovery_already_running' }],
+      duplicates: [],
+      counts: { recovered: 0, failed: 0, skipped: 1, duplicates: 0 }
+    };
+  }
+
+  const sheets = dependencies.sheets || { getRows };
+  const create = dependencies.createShipment || createShipment;
+  const provider = dependencies.provider || shippingProviders.shiprocket;
+  const log = dependencies.log || logger;
+  const limit = Math.min(100, Math.max(1, Number(options.limit || 25)));
+  const correlationId = options.correlationId || `shipping-recovery-${Date.now()}`;
+  const report = { recovered: [], failed: [], skipped: [], duplicates: [] };
+  recoveryRunning = true;
+
+  try {
+    const configurationErrors = provider.configurationErrors?.() || [];
+    if (!provider.configured?.() || configurationErrors.length) {
+      const error = Object.assign(new Error(
+        configurationErrors.length
+          ? configurationErrors.join('; ')
+          : 'Shiprocket is not configured.'
+      ), { code: 'SHIPROCKET_CONFIG_INVALID' });
+      log.error('shipping.recovery.configuration_invalid', {
+        correlationId,
+        code: error.code,
+        errors: configurationErrors
+      });
+      throw error;
+    }
+
+    const [orders, payments, shipments, addresses, items] = await Promise.all([
+      sheets.getRows('ORDERS'),
+      sheets.getRows('PAYMENTS'),
+      sheets.getRows('SHIPMENTS'),
+      sheets.getRows('ADDRESSES'),
+      sheets.getRows('ORDER_ITEMS')
+    ]);
+    const paymentsByOrder = new Map(payments.map((payment) => [payment.OrderID, payment]));
+    const shipmentsByOrder = new Map(shipments.map((shipment) => [shipment.OrderID, shipment]));
+    const candidates = orders.filter((order) => {
+      const shipment = shipmentsByOrder.get(order.OrderID);
+      const awb = shipment?.AWBNumber || shipment?.AWB || shipment?.TrackingNumber;
+      return !shipment ||
+        shipment.ShippingStatus === 'Retry Pending' ||
+        !shipment.ShipmentID ||
+        !awb;
+    });
+
+    log.info('shipping.recovery.started', {
+      correlationId,
+      candidates: candidates.length,
+      limit
+    });
+
+    for (const order of candidates.slice(0, limit)) {
+      const payment = paymentsByOrder.get(order.OrderID);
+      const shipment = shipmentsByOrder.get(order.OrderID);
+      const identity = { orderId: order.OrderID, orderNumber: order.OrderNumber };
+      const paid = payment?.Status === 'Paid' || order.PaymentStatus === 'Paid';
+      const orderStatus = String(order.OrderStatus || '').trim().toLowerCase();
+      const awb = shipment?.AWBNumber || shipment?.AWB || shipment?.TrackingNumber || '';
+
+      if (!paid) {
+        report.skipped.push({ ...identity, reason: 'order_not_paid' });
+        continue;
+      }
+      if (['cancelled', 'canceled', 'refunded', 'returned'].includes(orderStatus)) {
+        report.skipped.push({ ...identity, reason: `order_${orderStatus}` });
+        continue;
+      }
+      if (awb) {
+        report.skipped.push({ ...identity, reason: 'awb_already_exists', awb });
+        continue;
+      }
+
+      const address = addresses.find((row) => row.AddressID === order.AddressID);
+      const orderItems = items.filter((row) => row.OrderID === order.OrderID);
+      if (!address || !orderItems.length) {
+        report.failed.push({
+          ...identity,
+          code: 'RECOVERY_ORDER_DATA_INCOMPLETE',
+          error: !address ? 'Shipping address is missing.' : 'Order items are missing.'
+        });
+        continue;
+      }
+
+      const enriched = {
+        ...order,
+        shippingAddress: {
+          name: address.FullName,
+          phone: address.Phone,
+          addressLine: [address.AddressLine1, address.AddressLine2, address.Landmark].filter(Boolean).join(', '),
+          city: address.City,
+          state: address.State,
+          pincode: address.Pincode
+        },
+        items: orderItems
+      };
+
+      try {
+        // Check the carrier before creation. createShipment repeats this check
+        // immediately before its create call, protecting against a race.
+        const remote = await provider.findByExternalOrderId(order.OrderNumber);
+        const recovered = await create(enriched, 'shiprocket', {
+          correlationId,
+          recovery: true,
+          allowFallback: false,
+          orderId: order.OrderID,
+          shipmentId: shipment?.ShipmentID || ''
+        });
+        const result = {
+          ...identity,
+          shipmentId: recovered.ShipmentID,
+          providerShipmentId: recovered.ProviderShipmentID,
+          awb: recovered.AWBNumber,
+          courier: recovered.CourierName,
+          shippingStatus: recovered.ShippingStatus,
+          pickupStatus: recovered.PickupStatus
+        };
+        if (remote || shipment?.ProviderShipmentID) report.duplicates.push({ ...result, reason: 'existing_shiprocket_shipment_reconciled' });
+        else report.recovered.push(result);
+        log.info('shipping.recovery.order_completed', {
+          correlationId,
+          ...result,
+          reconciled: Boolean(remote || shipment?.ProviderShipmentID)
+        });
+      } catch (error) {
+        report.failed.push({
+          ...identity,
+          code: error.code || 'SHIPMENT_RECOVERY_FAILED',
+          providerStatus: error.providerStatus,
+          providerCode: error.providerCode,
+          error: error.message
+        });
+        log.error('shipping.recovery.order_failed', {
+          correlationId,
+          ...identity,
+          code: error.code || 'SHIPMENT_RECOVERY_FAILED',
+          providerStatus: error.providerStatus,
+          providerCode: error.providerCode,
+          providerBody: error.providerBody,
+          retryable: Boolean(error.retryable),
+          error: error.message
+        });
+      }
+    }
+  } finally {
+    recoveryRunning = false;
+  }
+
+  report.counts = {
+    recovered: report.recovered.length,
+    failed: report.failed.length,
+    skipped: report.skipped.length,
+    duplicates: report.duplicates.length
+  };
+  log.info('shipping.recovery.completed', { correlationId, ...report.counts });
+  return report;
+}
+
 export async function fetchLiveTracking(orderId, customerId) {
   const order = (await getRows('ORDERS')).find((row) => row.OrderID === orderId || row.OrderNumber === orderId);
   if (!order || (customerId && order.CustomerID !== customerId)) throw Object.assign(new Error('Order not found.'), { status: 404 });
@@ -389,7 +688,160 @@ const markShipmentPending = (order, provider, timestamp) =>
     ? updateRow('ORDERS', order._row, { ...order, OrderStatus: 'Pending Shipment', ShippingProvider: provider || 'delhivery', ShippingStatus: 'Retry Pending', PickupStatus: 'Pending', ShippingUpdatedAt: timestamp }).catch(() => {})
     : Promise.resolve();
 
-const orderToShiprocket = (order) => ({ order_id: order.OrderNumber, order_date: order.CreatedAt, pickup_location: env.shiprocketPickupLocation, billing_customer_name: order.shippingAddress?.name, billing_address: order.shippingAddress?.addressLine, billing_city: order.shippingAddress?.city, billing_pincode: order.shippingAddress?.pincode, billing_state: order.shippingAddress?.state, billing_country: 'India', billing_email: order.email || '', billing_phone: order.shippingAddress?.phone, shipping_is_billing: true, order_items: (order.items || []).map((item) => ({ name: item.name || item.ProductName, sku: item.id || item.ProductID, units: item.quantity || item.Quantity, selling_price: item.price || item.Price })), payment_method: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid', sub_total: Number(order.GrandTotal), length: 20, breadth: 15, height: 10, weight: order.weight || env.shippingWeightKg });
+const orderToShiprocket = (order) => ({
+  order_id: order.OrderNumber,
+  order_date: order.CreatedAt,
+  pickup_location: env.shiprocketPickupLocation,
+  billing_customer_name: order.shippingAddress?.name,
+  billing_address: order.shippingAddress?.addressLine,
+  billing_city: order.shippingAddress?.city,
+  billing_pincode: order.shippingAddress?.pincode,
+  billing_state: order.shippingAddress?.state,
+  billing_country: 'India',
+  billing_email: order.email || '',
+  billing_phone: order.shippingAddress?.phone,
+  shipping_is_billing: true,
+  order_items: (order.items || []).map((item) => ({
+    name: item.name || item.productName || item.ProductName,
+    sku: item.sku || item.productId || item.ProductID || item.id,
+    units: Number(item.quantity || item.Quantity),
+    selling_price: Number(item.price || item.Price)
+  })),
+  payment_method: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid',
+  shipping_charges: Number(order.Shipping || 0),
+  sub_total: Number(order.GrandTotal),
+  length: 20,
+  breadth: 15,
+  height: 10,
+  weight: order.weight || env.shippingWeightKg
+});
+
+const validateShiprocketOrderPayload = (payload) => {
+  const requiredText = [
+    'order_id', 'order_date', 'pickup_location', 'billing_customer_name',
+    'billing_address', 'billing_city', 'billing_state', 'billing_country',
+    'billing_phone', 'payment_method'
+  ];
+  const missing = requiredText.filter((key) => !String(payload[key] || '').trim());
+  if (!/^\d{6}$/.test(String(payload.billing_pincode || ''))) missing.push('billing_pincode');
+  if (!Array.isArray(payload.order_items) || !payload.order_items.length) missing.push('order_items');
+  payload.order_items?.forEach((item, index) => {
+    if (!String(item.name || '').trim()) missing.push(`order_items[${index}].name`);
+    if (!String(item.sku || '').trim()) missing.push(`order_items[${index}].sku`);
+    if (!Number.isInteger(item.units) || item.units <= 0) missing.push(`order_items[${index}].units`);
+    if (!Number.isFinite(item.selling_price) || item.selling_price < 0) missing.push(`order_items[${index}].selling_price`);
+  });
+  if (!Number.isFinite(payload.sub_total) || payload.sub_total <= 0) missing.push('sub_total');
+  if (![payload.length, payload.breadth, payload.height, payload.weight].every((value) => Number.isFinite(Number(value)) && Number(value) > 0)) missing.push('package_dimensions_or_weight');
+  if (missing.length) {
+    throw Object.assign(new Error(`Shiprocket order payload is invalid: ${[...new Set(missing)].join(', ')}`), {
+      code: 'SHIPROCKET_ORDER_PAYLOAD_INVALID',
+      retryable: false,
+      safeToFallback: false
+    });
+  }
+};
+
+const remoteOrderProjection = (remote) => {
+  const shipment = remote.shipments?.[0] || remote.shipment || {};
+  const awb = shipment.awb || shipment.awb_code || remote.awb || remote.awb_code || '';
+  return {
+    orderReference: String(remote.channel_order_id || remote.channel_order_number || ''),
+    providerOrderId: remote.id || remote.order_id || '',
+    providerShipmentId: shipment.id || shipment.shipment_id || remote.shipment_id || '',
+    awb,
+    courier: shipment.courier || shipment.courier_name || remote.courier_name || '',
+    shippingStatus: shipment.status || remote.status || 'Shipment Created',
+    pickupStatus: shipment.pickup_status || remote.pickup_status || 'Pending',
+    estimatedDelivery: shipment.estimated_delivery || remote.estimated_delivery || '',
+    labelUrl: shipment.label_url || remote.label_url || '',
+    manifestUrl: shipment.manifest_url || remote.manifest_url || '',
+    trackingUrl: awb ? shiprocketTrackingUrl(awb) : ''
+  };
+};
+
+export async function syncShiprocketOrders(context = {}) {
+  const provider = shippingProviders.shiprocket;
+  if (!provider.configured()) {
+    logger.info('shiprocket.sync.skipped', { ...context, reason: 'not_configured' });
+    return { fetched: 0, inserted: 0, updated: 0, unmatched: 0 };
+  }
+
+  const configurationErrors = provider.configurationErrors();
+  if (configurationErrors.length) {
+    logger.warn('shiprocket.sync.skipped', { ...context, reason: 'invalid_configuration', errors: configurationErrors });
+    return { fetched: 0, inserted: 0, updated: 0, unmatched: 0 };
+  }
+
+  const remoteOrders = [];
+  let page = 1;
+  let lastPage = 1;
+  do {
+    const result = await provider.listOrders(page, 100);
+    remoteOrders.push(...result.orders);
+    lastPage = Math.min(result.lastPage || page, 20);
+    page += 1;
+  } while (page <= lastPage);
+
+  const [orders, payments, shipments] = await Promise.all([
+    getRows('ORDERS'),
+    getRows('PAYMENTS'),
+    getRows('SHIPMENTS')
+  ]);
+  const paidOrderIds = new Set(payments.filter((payment) => payment.Status === 'Paid').map((payment) => payment.OrderID));
+  let inserted = 0;
+  let updated = 0;
+  let unmatched = 0;
+
+  for (const remote of remoteOrders) {
+    const projection = remoteOrderProjection(remote);
+    // Never import a carrier-side order into commerce. Only reconcile an
+    // existing LitePuff order whose payment is already durable and Paid.
+    const order = orders.find((row) =>
+      paidOrderIds.has(row.OrderID) &&
+      [row.OrderNumber, row.OrderID].map(String).includes(projection.orderReference)
+    );
+    if (!order) {
+      unmatched += 1;
+      continue;
+    }
+    let shipment = shipments.find((row) => row.OrderID === order.OrderID);
+    const now = new Date().toISOString();
+    const record = {
+      ...pendingShipment(order, shipment, 'shiprocket', now),
+      ...shipment,
+      ShipmentID: shipment?.ShipmentID || `shipment-${order.OrderID}`,
+      OrderID: order.OrderID,
+      Provider: 'shiprocket',
+      ProviderShipmentID: projection.providerShipmentId || shipment?.ProviderShipmentID || '',
+      AWBNumber: projection.awb || shipment?.AWBNumber || '',
+      TrackingNumber: projection.awb || shipment?.TrackingNumber || '',
+      CourierName: projection.courier || shipment?.CourierName || '',
+      TrackingURL: projection.trackingUrl || shipment?.TrackingURL || '',
+      ShippingStatus: projection.shippingStatus || shipment?.ShippingStatus || 'Shipment Created',
+      PickupStatus: projection.pickupStatus || shipment?.PickupStatus || 'Pending',
+      LabelURL: projection.labelUrl || shipment?.LabelURL || '',
+      ManifestURL: projection.manifestUrl || shipment?.ManifestURL || '',
+      EstimatedDelivery: projection.estimatedDelivery || shipment?.EstimatedDelivery || order.EstimatedDelivery,
+      LatestEvent: projection.shippingStatus || shipment?.LatestEvent || 'Shipment Reconciled',
+      LatestEventAt: now,
+      CreatedAt: shipment?.CreatedAt || now,
+      UpdatedAt: now
+    };
+    if (shipment?._row) {
+      await updateRow('SHIPMENTS', shipment._row, record);
+      updated += 1;
+    } else {
+      await appendRow('SHIPMENTS', record);
+      inserted += 1;
+      shipment = record;
+    }
+    await mirrorShipmentToOrder(order, record);
+  }
+
+  logger.info('shiprocket.sync.completed', { ...context, fetched: remoteOrders.length, inserted, updated, unmatched });
+  return { fetched: remoteOrders.length, inserted, updated, unmatched };
+}
 const orderToDelhivery = (order) => ({ name: order.shippingAddress?.name, add: order.shippingAddress?.addressLine, pin: order.shippingAddress?.pincode, city: order.shippingAddress?.city, state: order.shippingAddress?.state, country: 'India', phone: order.shippingAddress?.phone, order: order.OrderNumber, payment_mode: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid', total_amount: order.GrandTotal, products_desc: (order.items || []).map((item) => item.name || item.ProductName).join(', '), weight: Math.round((order.weight || env.shippingWeightKg) * 1000) });
 
 let retryTimer;
@@ -402,6 +854,14 @@ export async function retryPendingShipments() {
   }
   retryRunning = true;
   try {
+    await syncShiprocketOrders({ correlationId: 'shiprocket-periodic-sync' })
+      .catch((error) => logger.warn('shiprocket.sync.failed', {
+        providerStatus: error.providerStatus,
+        providerCode: error.providerCode,
+        providerBody: error.providerBody,
+        retryable: Boolean(error.retryable),
+        error: error.message
+      }));
     const pending = (await getRows('SHIPMENTS'))
       .filter((row) => row.ShippingStatus === 'Retry Pending')
       .sort((a, b) => String(a.UpdatedAt).localeCompare(String(b.UpdatedAt)))
