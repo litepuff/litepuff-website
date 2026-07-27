@@ -14,7 +14,7 @@ const source = (overrides = {}) => ({
   WHATSAPP_OTP_TEMPLATE: 'otp_verification', ORDER_CONFIRMED_TEMPLATE: 'order_confirmed',
   ORDER_SHIPPED_TEMPLATE: 'order_shipped', ORDER_DELIVERED_TEMPLATE: 'order_delivered',
   PAYMENT_SUCCESS_TEMPLATE: 'payment_success', PAYMENT_FAILED_TEMPLATE: 'payment_failed',
-  WHATSAPP_TIMEOUT_MS: '1000', WHATSAPP_MAX_RETRIES: '2', WHATSAPP_TEMPLATE_LANGUAGE: 'en_US', ...overrides
+  WHATSAPP_TIMEOUT_MS: '1000', WHATSAPP_MAX_RETRIES: '2', WHATSAPP_TEMPLATE_LANGUAGE: 'en', ...overrides
 });
 const silent = { info() {}, warn() {}, error() {} };
 
