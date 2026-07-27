@@ -783,33 +783,45 @@ const markShipmentPending = (order, provider, timestamp) =>
     ? updateRow('ORDERS', order._row, { ...order, OrderStatus: 'Pending Shipment', ShippingProvider: provider || 'delhivery', ShippingStatus: 'Retry Pending', PickupStatus: 'Pending', ShippingUpdatedAt: timestamp }).catch(() => {})
     : Promise.resolve();
 
-const orderToShiprocket = (order) => ({
-  order_id: order.OrderNumber,
-  order_date: order.CreatedAt,
-  pickup_location: env.shiprocketPickupLocation,
-  billing_customer_name: order.shippingAddress?.name,
-  billing_address: order.shippingAddress?.addressLine,
-  billing_city: order.shippingAddress?.city,
-  billing_pincode: order.shippingAddress?.pincode,
-  billing_state: order.shippingAddress?.state,
-  billing_country: 'India',
-  billing_email: order.email || '',
-  billing_phone: order.shippingAddress?.phone,
-  shipping_is_billing: true,
-  order_items: (order.items || []).map((item) => ({
-    name: item.name || item.productName || item.ProductName,
-    sku: item.sku || item.productId || item.ProductID || item.id,
-    units: Number(item.quantity || item.Quantity),
-    selling_price: Number(item.price || item.Price)
-  })),
-  payment_method: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid',
-  shipping_charges: Number(order.Shipping || 0),
-  sub_total: Number(order.GrandTotal),
-  length: 20,
-  breadth: 15,
-  height: 10,
-  weight: order.weight || env.shippingWeightKg
-});
+const orderToShiprocket = (order) => {
+  const nameParts = String(order.shippingAddress?.name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const firstName = nameParts.shift() || 'Customer';
+  const lastName = nameParts.join(' ') || '.';
+
+  return {
+    order_id: order.OrderNumber,
+    order_date: order.CreatedAt,
+    pickup_location: env.shiprocketPickupLocation,
+    billing_customer_name: firstName,
+    billing_last_name: lastName,
+    billing_address: order.shippingAddress?.addressLine,
+    billing_city: order.shippingAddress?.city,
+    billing_pincode: order.shippingAddress?.pincode,
+    billing_state: order.shippingAddress?.state,
+    billing_country: 'India',
+    billing_email: order.email || '',
+    billing_phone: order.shippingAddress?.phone,
+    shipping_is_billing: true,
+    shipping_customer_name: firstName,
+    shipping_last_name: lastName,
+    order_items: (order.items || []).map((item) => ({
+      name: item.name || item.productName || item.ProductName,
+      sku: item.sku || item.productId || item.ProductID || item.id,
+      units: Number(item.quantity || item.Quantity),
+      selling_price: Number(item.price || item.Price)
+    })),
+    payment_method: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid',
+    shipping_charges: Number(order.Shipping || 0),
+    sub_total: Number(order.GrandTotal),
+    length: 20,
+    breadth: 15,
+    height: 10,
+    weight: order.weight || env.shippingWeightKg
+  };
+};
 
 const validateShiprocketOrderPayload = (payload) => {
   const validationErrors = {};
@@ -822,11 +834,14 @@ const validateShiprocketOrderPayload = (payload) => {
     'order_date',
     'pickup_location',
     'billing_customer_name',
+    'billing_last_name',
     'billing_phone',
     'billing_address',
     'billing_city',
     'billing_state',
     'billing_country',
+    'shipping_customer_name',
+    'shipping_last_name',
     'payment_method'
   ];
   requiredText.forEach((field) => {

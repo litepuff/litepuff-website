@@ -165,6 +165,51 @@ test('Shiprocket order payload supports the lowercase checkout item shape', asyn
   assert.equal(payload.order_items[0].sku, 'product-1');
   assert.equal(payload.order_items[0].units, 1);
   assert.equal(payload.order_items[0].selling_price, 499);
+  assert.equal(payload.billing_customer_name, 'Customer');
+  assert.equal(payload.billing_last_name, '.');
+  assert.equal(payload.shipping_customer_name, 'Customer');
+  assert.equal(payload.shipping_last_name, '.');
+});
+
+test('Shiprocket payload safely splits multi-word customer names', async () => {
+  const provider = new ShiprocketProvider();
+  provider.findByExternalOrderId = async () => null;
+  let payload;
+  provider.call = async (path, options) => {
+    if (path === '/orders/create/adhoc') {
+      payload = JSON.parse(options.body);
+      return { order_id: 8101, shipment_id: 9101, status: 'NEW' };
+    }
+    return {};
+  };
+  provider.assignAwb = async () => ({ awb: 'AWB-NAME', courier: 'Courier', status: 'AWB Assigned' });
+  provider.requestPickup = async () => ({ pickupStatus: 'Pickup Scheduled', pickupDate: '2026-07-28' });
+  provider.generateLabel = async () => 'https://example.test/label.pdf';
+  provider.generateManifest = async () => 'https://example.test/manifest.pdf';
+
+  await provider.create({
+    OrderID: 'order-name',
+    OrderNumber: 'LP-NAME',
+    CreatedAt: '2026-07-27T10:00:00.000Z',
+    PaymentMethod: 'Razorpay',
+    GrandTotal: 499,
+    Shipping: 0,
+    email: 'customer@example.test',
+    shippingAddress: {
+      name: '  Rahul   Kumar Singh  ',
+      phone: '9999999999',
+      addressLine: 'Test address',
+      city: 'Delhi',
+      state: 'Delhi',
+      pincode: '110030',
+    },
+    items: [{ productId: 'product-1', productName: 'Makhana', quantity: 1, price: 499 }],
+  }, { courierId: 10, courier: 'Courier', cost: 50, estimatedDays: 3 });
+
+  assert.equal(payload.billing_customer_name, 'Rahul');
+  assert.equal(payload.billing_last_name, 'Kumar Singh');
+  assert.equal(payload.shipping_customer_name, 'Rahul');
+  assert.equal(payload.shipping_last_name, 'Kumar Singh');
 });
 
 test('pending shipment recovery is paid-order-only, idempotent and reports reconciled duplicates', async () => {
@@ -355,7 +400,6 @@ test('local Shiprocket payload validation returns exact invalid field names', as
       for (const field of [
         'order_id',
         'order_date',
-        'billing_customer_name',
         'billing_phone',
         'billing_address',
         'billing_city',
