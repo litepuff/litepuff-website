@@ -226,8 +226,23 @@ export class ShiprocketProvider {
       status: data.status || data.status_code || 'Shipment Created'
     };
   }
-  async assignAwb(providerShipmentId, courierId) {
-    const data = await this.call('/courier/assign/awb', { method: 'POST', body: JSON.stringify({ shipment_id: providerShipmentId, courier_id: courierId }) });
+  async assignAwb(providerShipmentId, courierId, assignmentContext = {}) {
+    logger.info('shiprocket.awb.assignment.started', {
+      shipment_id: providerShipmentId,
+      courier_company_id: courierId,
+      pickup_pincode: assignmentContext.pickupPincode,
+      delivery_pincode: assignmentContext.deliveryPincode,
+      weight: assignmentContext.weight,
+      payment_method: assignmentContext.paymentMethod
+    });
+    let data;
+    try {
+      data = await this.call('/courier/assign/awb', { method: 'POST', body: JSON.stringify({ shipment_id: providerShipmentId, courier_id: courierId }) });
+    } catch (error) {
+      const providerMessage = `${error.message || ''} ${JSON.stringify(error.providerBody || {})}`.toLowerCase();
+      if (!providerMessage.includes('given courier not serviceable')) throw error;
+      data = await this.call('/courier/assign/awb', { method: 'POST', body: JSON.stringify({ shipment_id: providerShipmentId }) });
+    }
     const assigned = data?.response?.data || data?.data || data;
     const awb = assigned?.awb_code || assigned?.awb || '';
     if (!awb) throw Object.assign(new Error('Shiprocket did not return an AWB.'), { code: 'SHIPROCKET_AWB_MISSING', safeToFallback: false });
@@ -345,7 +360,12 @@ export class ShiprocketProvider {
       await onProgress({ AWBNumber: remote.awb, TrackingNumber: remote.awb, CourierName: courier, ShippingStatus: remote.status || 'AWB Assigned', TrackingURL: shiprocketTrackingUrl(remote.awb), LatestEvent: 'AWB Reconciled', LatestEventAt: new Date().toISOString() }, 'awb-reconciled');
     }
     if (!awb) {
-      const assigned = await this.assignAwb(remote.providerShipmentId, quote.courierId);
+      const assigned = await this.assignAwb(remote.providerShipmentId, quote.courierId, {
+        pickupPincode: env.shippingOriginPincode,
+        deliveryPincode: order.shippingAddress?.pincode,
+        weight: order.weight || env.shippingWeightKg,
+        paymentMethod: order.PaymentMethod === 'Cash on Delivery' ? 'COD' : 'Prepaid'
+      });
       awb = assigned.awb;
       courier = assigned.courier || courier;
       await onProgress({ AWBNumber: awb, TrackingNumber: awb, CourierName: courier, ShippingStatus: assigned.status, TrackingURL: shiprocketTrackingUrl(awb), LatestEvent: 'AWB Assigned', LatestEventAt: new Date().toISOString() }, 'awb-assigned');
@@ -470,7 +490,7 @@ async function createShipmentUnlocked(order, preferredProvider, context = {}) {
     logger.info('shipping.create.idempotent_existing', { ...context, orderId: order.OrderID, shipmentId: existing.ShipmentID, provider: existing.Provider });
     return existing;
   }
-  const input = { originPincode: env.shippingOriginPincode, destinationPincode: order.Pincode || order.shippingAddress?.pincode, weight: order.weight || env.shippingWeightKg, cod: order.PaymentMethod === 'Cash on Delivery' };
+  const input = { originPincode: env.shippingOriginPincode, destinationPincode: order.shippingAddress?.pincode, weight: order.weight || env.shippingWeightKg, cod: order.PaymentMethod === 'Cash on Delivery' };
   let quote;
   try {
     const selected = preferredProvider && shippingProviders[preferredProvider];

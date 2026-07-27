@@ -98,6 +98,51 @@ test('Shiprocket provider reconciles an existing shipment without creating anoth
   assert.ok(stages.includes('manifest-generated'));
 });
 
+test('Shiprocket AWB assignment retries once without courier id when the selected courier is not serviceable', async () => {
+  const provider = new ShiprocketProvider();
+  const requests = [];
+  provider.call = async (path, options) => {
+    assert.equal(path, '/courier/assign/awb');
+    requests.push(JSON.parse(options.body));
+    if (requests.length === 1) {
+      throw Object.assign(new Error('Given courier not serviceable'), {
+        providerStatus: 400,
+        providerBody: { message: 'Given courier not serviceable' },
+      });
+    }
+    return { response: { data: { awb_code: 'AWB-AUTO', courier_name: 'Auto Courier', awb_assign_status: 1 } } };
+  };
+
+  const result = await provider.assignAwb(7001, 10, {
+    pickupPincode: '110030',
+    deliveryPincode: '560001',
+    weight: 0.5,
+    paymentMethod: 'Prepaid',
+  });
+
+  assert.deepEqual(requests, [
+    { shipment_id: 7001, courier_id: 10 },
+    { shipment_id: 7001 },
+  ]);
+  assert.equal(result.awb, 'AWB-AUTO');
+  assert.equal(result.courier, 'Auto Courier');
+});
+
+test('Shiprocket AWB assignment does not retry other provider failures', async () => {
+  const provider = new ShiprocketProvider();
+  let calls = 0;
+  provider.call = async () => {
+    calls += 1;
+    throw Object.assign(new Error('Invalid shipment'), {
+      providerStatus: 400,
+      providerBody: { message: 'Invalid shipment' },
+    });
+  };
+
+  await assert.rejects(() => provider.assignAwb(7001, 10), /Invalid shipment/);
+  assert.equal(calls, 1);
+});
+
 test('ambiguous Shiprocket create failure is marked unsafe for carrier fallback', async () => {
   const provider = new ShiprocketProvider();
   provider.findByExternalOrderId = async () => null;
