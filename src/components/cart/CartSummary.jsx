@@ -5,6 +5,7 @@ import { useOrderPricing } from '../../hooks/useOrderPricing.js';
 import { formatMoney } from '../../utils/formatMoney';
 import CouponSection from './CouponSection.jsx';
 import ShippingProgress from './ShippingProgress.jsx';
+import useMetaTracking from '../../analytics/useMetaTracking.js';
 
 const trustItems = [[FiLock, 'Secure Checkout'], [FiTruck, 'Fast Delivery'], [FiMapPin, 'Pan India'], [FiCheckCircle, 'FSSAI Certified']];
 
@@ -14,7 +15,16 @@ function Row({ label, children }) {
 
 export default function CartSummary({ items = [], coupon = null, onCouponApplied }) {
   const navigate = useNavigate();
+  const { trackInitiateCheckout } = useMetaTracking();
   const pricing = useOrderPricing(items, { couponCode: coupon?.code, couponDiscount: coupon?.discount, paymentMethod: 'online' });
+  const proceedToCheckout = () => {
+    try {
+      trackInitiateCheckout({ items, value: pricing.grandTotal });
+    } catch {
+      // Analytics is optional and must never affect navigation.
+    }
+    navigate('/checkout');
+  };
   return (
     <aside className="rounded-[28px] border border-[#ECE7DD] bg-white p-6 shadow-[0_14px_42px_rgba(36,48,41,0.055)] md:sticky md:top-[120px] lg:p-8">
       <h2 className="font-display text-[34px] font-semibold leading-none tracking-[-0.03em] text-[#243029]">Order Summary</h2>
@@ -30,7 +40,7 @@ export default function CartSummary({ items = [], coupon = null, onCouponApplied
       <div className="mt-5"><ShippingProgress quantity={pricing.quantity} /></div>
       <div className="mt-4"><CouponSection onApplied={onCouponApplied} /></div>
       <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-        <motion.button type="button" onClick={() => navigate('/checkout')} whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }} className="flex h-[52px] items-center justify-center rounded-full bg-[#1E4D3A] px-5 text-sm font-semibold text-white hover:bg-[#2C614A]">Proceed to Checkout</motion.button>
+        <motion.button type="button" onClick={proceedToCheckout} whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }} className="flex h-[52px] items-center justify-center rounded-full bg-[#1E4D3A] px-5 text-sm font-semibold text-white hover:bg-[#2C614A]">Proceed to Checkout</motion.button>
         <Link to="/products" className="flex h-[52px] items-center justify-center rounded-full border border-[#1E4D3A] px-5 text-sm font-semibold text-[#1E4D3A] hover:bg-[#FAF8F2]">Continue Shopping</Link>
       </div>
       <div className="mt-5 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-[#ECE7DD] pt-4">

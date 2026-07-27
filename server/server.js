@@ -28,6 +28,7 @@ import {
 import { paymentWebhook } from './controllers/paymentController.js';
 import healthRoutes from './routes/healthRoutes.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhookRoutes.js';
+import shiprocketWebhookRoutes from './routes/shiprocketWebhookRoutes.js';
 import { responseEnvelope } from './middleware/responseMiddleware.js';
 import { errorHandler, notFoundHandler } from './middleware/errorMiddleware.js';
 import { logger, requestLogger } from './utils/logger.js';
@@ -106,13 +107,14 @@ const allowedOrigins = new Set([env.clientUrl, env.appUrl].filter(Boolean));
 app.use(cors({ origin: (origin, callback) => !origin || allowedOrigins.has(origin) ? callback(null, true) : callback(new AppError('Request origin is not allowed.', { status: 403, code: 'CORS_ORIGIN_REJECTED' })), credentials: true }));
 app.use(requestLogger);
 app.post('/api/payment/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '256kb' }), (request, response, next) => Promise.resolve(paymentWebhook(request, response, next)).catch(next));
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser(env.cookieSecret));
 app.use(securityStack);
 app.use(csrfArchitectureGuard);
 app.use('/api', responseEnvelope);
-
-app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
+app.use('/api/webhooks/shipping', webhookLimiter, shiprocketWebhookRoutes);
+app.use('/api', apiLimiter);
 app.use('/uploads', express.static(uploadFolder));
 
 app.use('/api/health', healthRoutes);
@@ -127,7 +129,7 @@ app.use('/api', contentRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/tracking', trackingRouter);
 app.use('/api/cart', cartRoutes);
-app.use('/api/payment', paymentRoutes);
+app.use('/api/payment', paymentLimiter, paymentRoutes);
 app.use('/api/profile', profileRouter);
 app.use('/api', addressesRouter);
 app.use('/api/wishlist', wishlistRouter);

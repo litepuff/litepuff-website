@@ -20,6 +20,7 @@ import { formatMoney } from "../utils/formatMoney.js";
 import { useToast } from "../context/ToastContext.jsx";
 import { useOrderPricing } from "../hooks/useOrderPricing.js";
 import { contentService } from "../services/contentService.js";
+import useMetaTracking from "../analytics/useMetaTracking.js";
 
 const paymentMethods = [
   {
@@ -124,6 +125,8 @@ export default function Checkout() {
   const { customer } = useCustomerAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { trackPurchase } = useMetaTracking();
+  const purchaseTrackedRef = useRef(false);
   const [address, setAddress] = useState({
     fullName: customer
       ? `${customer.firstName || ""} ${customer.lastName || ""}`.trim()
@@ -308,6 +311,39 @@ export default function Checkout() {
         });
         checkout.open();
       });
+      try {
+        const transactionId = String(
+          confirmedPayment?.transactionId ||
+          confirmedPayment?.paymentId ||
+          payment.paymentId ||
+          confirmed?.OrderID ||
+          confirmed?.id ||
+          '',
+        ).trim();
+        const purchaseStorageKey = transactionId
+          ? `litepuff:meta:purchase:${transactionId}`
+          : '';
+        const previouslyTracked = purchaseStorageKey
+          ? localStorage.getItem(purchaseStorageKey) === '1'
+          : purchaseTrackedRef.current;
+
+        if (!previouslyTracked) {
+          purchaseTrackedRef.current = true;
+          if (purchaseStorageKey) localStorage.setItem(purchaseStorageKey, '1');
+          trackPurchase(
+            {
+              orderId: confirmed?.OrderID || confirmed?.id || transactionId,
+              transactionId,
+              items: cartItems,
+              value: confirmedPayment?.amount || totals.grandTotal || cartTotal,
+              currency: confirmedPayment?.currency || payment.currency || 'INR',
+            },
+            transactionId ? `purchase-${transactionId}` : '',
+          );
+        }
+      } catch {
+        // Analytics is optional and must never affect order completion.
+      }
       clearCart();
       showToast("Payment Successful");
       showToast("Order Confirmed");

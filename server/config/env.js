@@ -53,6 +53,7 @@ export const env = {
   shiprocketEmail: process.env.SHIPROCKET_EMAIL || '',
   shiprocketPassword: process.env.SHIPROCKET_PASSWORD || '',
   shiprocketPickupLocation: process.env.SHIPROCKET_PICKUP_LOCATION || 'Primary',
+  shiprocketWebhookToken: process.env.SHIPROCKET_WEBHOOK_TOKEN || '',
   delhiveryToken: process.env.DELHIVERY_TOKEN || process.env.DELHIVERY_API_TOKEN || '',
   delhiveryClientName: process.env.DELHIVERY_CLIENT_NAME || '',
   shippingOriginPincode: process.env.SHIPPING_ORIGIN_PINCODE || '',

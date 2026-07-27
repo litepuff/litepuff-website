@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { FiCheck, FiHeart } from 'react-icons/fi';
 import { Link, useParams } from 'react-router-dom';
@@ -17,6 +17,7 @@ import { customerService } from '../services/customerService';
 import { useToast } from '../context/ToastContext';
 import { contentService } from '../services/contentService';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
+import useMetaTracking from '../analytics/useMetaTracking.js';
 
 const productImages = {
   Cheese: cheeseImage,
@@ -281,6 +282,8 @@ export default function ProductDetailsPage() {
   const { slug } = useParams();
   const { addToCart } = useCart();
   const { showToast } = useToast();
+  const { trackViewContent } = useMetaTracking();
+  const trackedProductIdsRef = useRef(new Set());
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [quantity, setQuantity] = useState(1);
@@ -313,6 +316,29 @@ export default function ProductDetailsPage() {
     }
     loadProduct();
   }, [slug]);
+
+  useEffect(() => {
+    try {
+      const productId = String(product?.id ?? '').trim();
+      const productName = String(product?.name ?? '').trim();
+      const productCategory = String(product?.category ?? '').trim();
+      const productValue = Number(product?.price);
+
+      if (
+        !productId ||
+        !productName ||
+        !productCategory ||
+        !Number.isFinite(productValue) ||
+        productValue < 0 ||
+        trackedProductIdsRef.current.has(productId)
+      ) return;
+
+      trackedProductIdsRef.current.add(productId);
+      trackViewContent(product);
+    } catch {
+      // Analytics is optional and must never affect product rendering.
+    }
+  }, [product, trackViewContent]);
 
   if (!product) return <div className="container-page py-12 text-sm">Loading product...</div>;
 

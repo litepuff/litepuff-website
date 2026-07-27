@@ -1,7 +1,7 @@
 import { whatsAppWebhookService } from '../services/WhatsAppWebhookService.js';
 import { whatsAppHealthService } from '../services/WhatsAppHealthService.js';
 import { ok } from '../utils/apiResponse.js';
-import { incomingMessageController } from './IncomingMessageController.js';
+import { logger } from '../utils/logger.js';
 
 export function verifyWhatsAppWebhook(request, response) {
   const challenge = whatsAppWebhookService.verify(request.query);
@@ -9,7 +9,9 @@ export function verifyWhatsAppWebhook(request, response) {
 }
 
 export async function receiveWhatsAppWebhook(request, response) {
-  const result = await incomingMessageController.receive(request.body);
+  logger.info('whatsapp.webhook.processing', { correlationId: request.id });
+  const result = await whatsAppWebhookService.process(request.body, { correlationId: request.id });
+  logger.info('whatsapp.webhook.processed', { correlationId: request.id, processed: result.processed, failed: result.failed });
   ok(response, result, 'Webhook acknowledged.');
 }
 

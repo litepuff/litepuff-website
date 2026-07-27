@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState } from 'react';
 import { customerService } from '../services/customerService';
 import { useCustomerAuth } from './CustomerAuthContext';
 import { siteConfig } from '../utils/siteConfig.js';
+import useMetaTracking from '../analytics/useMetaTracking.js';
 
 const CartContext = createContext(null);
 const normalizePrice = (item) => ({
@@ -15,6 +16,7 @@ const normalizePrice = (item) => ({
 
 export function CartProvider({ children }) {
   const { customer } = useCustomerAuth();
+  const { trackAddToCart } = useMetaTracking();
   const [cartItems, setCartItems] = useState(() => {
     return JSON.parse(localStorage.getItem('everydayMakhanaCart') || '[]').map(normalizePrice);
   });
@@ -39,6 +41,11 @@ export function CartProvider({ children }) {
     }
 
     saveCart(nextItems);
+    try {
+      trackAddToCart(normalizePrice(product), quantity);
+    } catch {
+      // Analytics is optional and must never affect cart behavior.
+    }
     if (customer) {
       customerService.addCart(product.id, quantity).catch(() => {});
     }

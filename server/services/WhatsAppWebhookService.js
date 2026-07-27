@@ -19,12 +19,12 @@ export class WhatsAppWebhookService {
     return verification.challenge;
   }
 
-  async process(rawBody) {
+  async process(rawBody, context = {}) {
     const payload = parseWebhookPayload(rawBody);
     if (!validateWebhookPayload(payload)) throw new AppError('Malformed WhatsApp webhook payload.', { status: 400, code: 'WHATSAPP_WEBHOOK_PAYLOAD_INVALID', expose: true });
     const result = await this.processor.process(payload);
     this.health.webhookReceived();
-    this.log.info('whatsapp.webhook.received', { entryCount: payload.entry.length, eventCounts: result.eventCounts, processed: result.processed, failed: result.failed });
+    this.log.info('whatsapp.webhook.received', { ...context, entryCount: payload.entry.length, eventCounts: result.eventCounts, processed: result.processed, failed: result.failed });
     return { received: true, ...result };
   }
 }
