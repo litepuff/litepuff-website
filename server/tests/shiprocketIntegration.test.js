@@ -239,3 +239,137 @@ test('pending shipment recovery is paid-order-only, idempotent and reports recon
   assert.equal(report.counts.skipped, 3);
   assert.equal(report.counts.failed, 0);
 });
+
+test('Shiprocket 422 diagnostics preserve complete validation errors and redact only credentials', async () => {
+  const provider = new ShiprocketProvider();
+  provider.authenticate = async () => 'test-token';
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    message: 'Oops! Invalid Data.',
+    status_code: 422,
+    errors: {
+      billing_pincode: ['The billing pincode must be 6 digits.'],
+      pickup_location: ['The selected pickup location is invalid.'],
+      order_items: {
+        0: {
+          sku: ['The sku field is required.'],
+          weight: ['The weight must be greater than zero.']
+        }
+      }
+    },
+    password: 'must-not-leak',
+    api_token: 'must-not-leak',
+    request_reference: 'validation-reference'
+  }), {
+    status: 422,
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  try {
+    await assert.rejects(
+      () => provider.call('/orders/create/adhoc', { method: 'POST', body: '{}' }),
+      (error) => {
+        assert.equal(error.providerStatus, 422);
+        assert.equal(error.providerBody.message, 'Oops! Invalid Data.');
+        assert.equal(error.providerBody.request_reference, 'validation-reference');
+        assert.equal(error.providerBody.password, '[REDACTED]');
+        assert.equal(error.providerBody.api_token, '[REDACTED]');
+        assert.deepEqual(error.validationErrors.billing_pincode, ['The billing pincode must be 6 digits.']);
+        assert.ok(error.validationFields.includes('billing_pincode'));
+        assert.ok(error.validationFields.includes('pickup_location'));
+        assert.ok(error.validationFields.includes('order_items.0.sku'));
+        assert.ok(error.validationFields.includes('order_items.0.weight'));
+        return true;
+      }
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('recovery report returns complete Shiprocket validation diagnostics', async () => {
+  const providerBody = {
+    message: 'Oops! Invalid Data.',
+    status_code: 422,
+    errors: { billing_pincode: ['Invalid pincode.'], sku: ['SKU is required.'] }
+  };
+  const error = Object.assign(new Error('Oops! Invalid Data.'), {
+    code: 'SHIPROCKET_VALIDATION_FAILED',
+    providerStatus: 422,
+    providerCode: 422,
+    providerBody,
+    validationErrors: providerBody.errors,
+    validationFields: ['billing_pincode', 'sku'],
+    retryable: false
+  });
+  const rows = {
+    ORDERS: [{ OrderID: 'order-validation', OrderNumber: 'LP-VALIDATION', AddressID: 'address-validation', PaymentStatus: 'Paid', OrderStatus: 'Confirmed' }],
+    PAYMENTS: [{ OrderID: 'order-validation', Status: 'Paid' }],
+    SHIPMENTS: [{ ShipmentID: 'shipment-order-validation', OrderID: 'order-validation', ShippingStatus: 'Retry Pending', AWBNumber: '', ProviderShipmentID: '' }],
+    ADDRESSES: [{ AddressID: 'address-validation', FullName: 'Customer', Phone: '9999999999', AddressLine1: 'Address', City: 'Delhi', State: 'Delhi', Pincode: '110030' }],
+    ORDER_ITEMS: [{ OrderID: 'order-validation', ProductID: 'product-1', ProductName: 'Makhana', Quantity: 1, Price: 499 }]
+  };
+  const report = await recoverPendingShipments(
+    { correlationId: 'validation-report-test' },
+    {
+      sheets: { async getRows(name) { return rows[name].map((row) => ({ ...row })); } },
+      provider: {
+        configured: () => true,
+        configurationErrors: () => [],
+        findByExternalOrderId: async () => null
+      },
+      createShipment: async () => { throw error; },
+      log: silent
+    }
+  );
+
+  assert.equal(report.counts.failed, 1);
+  assert.deepEqual(report.failed[0].providerBody, providerBody);
+  assert.deepEqual(report.failed[0].validationErrors, providerBody.errors);
+  assert.deepEqual(report.failed[0].validationFields, ['billing_pincode', 'sku']);
+});
+
+test('local Shiprocket payload validation returns exact invalid field names', async () => {
+  const provider = new ShiprocketProvider();
+  provider.findByExternalOrderId = async () => null;
+  await assert.rejects(
+    () => provider.create({
+      OrderID: 'order-invalid-fields',
+      OrderNumber: '',
+      CreatedAt: 123,
+      PaymentMethod: 'Razorpay',
+      GrandTotal: 0,
+      Shipping: -1,
+      shippingAddress: {
+        name: '',
+        phone: '',
+        addressLine: '',
+        city: '',
+        state: '',
+        pincode: '123'
+      },
+      items: [{ productId: '', productName: '', quantity: 0, price: -1 }]
+    }, { courierId: 10, courier: 'Courier' }),
+    (error) => {
+      assert.equal(error.code, 'SHIPROCKET_ORDER_PAYLOAD_INVALID');
+      for (const field of [
+        'order_id',
+        'order_date',
+        'billing_customer_name',
+        'billing_phone',
+        'billing_address',
+        'billing_city',
+        'billing_state',
+        'billing_pincode',
+        'shipping_charges',
+        'sub_total',
+        'order_items[0].name',
+        'order_items[0].sku',
+        'order_items[0].units',
+        'order_items[0].selling_price'
+      ]) assert.ok(error.validationFields.includes(field), field);
+      assert.ok(!error.validationFields.includes('package_dimensions_or_weight'));
+      return true;
+    }
+  );
+});

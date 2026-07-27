@@ -10,16 +10,48 @@ const logShippingActivity = (action, metadata) =>
 const shiprocketTrackingUrl = (awb) =>
   awb ? `https://shiprocket.co/tracking/${encodeURIComponent(awb)}` : '';
 
-const redactProviderPayload = (value, depth = 0) => {
-  if (depth > 6 || value == null) return value;
-  if (Array.isArray(value)) return value.slice(0, 50).map((item) => redactProviderPayload(item, depth + 1));
-  if (typeof value !== 'object') return typeof value === 'string' ? value.slice(0, 2_000) : value;
+const redactProviderPayload = (value) => {
+  if (value == null) return value;
+  if (Array.isArray(value)) return value.map((item) => redactProviderPayload(item));
+  if (typeof value !== 'object') return value;
+  const protectedKeys = new Set([
+    'authorization',
+    'password',
+    'token',
+    'access_token',
+    'refresh_token',
+    'api_token',
+    'api_key',
+    'secret'
+  ]);
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [
     key,
-    /token|password|secret|authorization|credential/i.test(key)
+    protectedKeys.has(String(key).toLowerCase())
       ? '[REDACTED]'
-      : redactProviderPayload(item, depth + 1)
+      : redactProviderPayload(item)
   ]));
+};
+
+const validationDiagnostics = (payload) => {
+  const validationErrors =
+    payload?.errors ??
+    payload?.data?.errors ??
+    payload?.error?.errors ??
+    null;
+  const fields = new Set();
+  const collectFields = (value, prefix = '') => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    for (const [key, child] of Object.entries(value)) {
+      const field = prefix ? `${prefix}.${key}` : key;
+      fields.add(field);
+      if (child && typeof child === 'object' && !Array.isArray(child)) collectFields(child, field);
+    }
+  };
+  collectFields(validationErrors);
+  return {
+    validationErrors: redactProviderPayload(validationErrors),
+    validationFields: [...fields]
+  };
 };
 
 const providerError = ({ url, response, payload }) => {
@@ -27,12 +59,16 @@ const providerError = ({ url, response, payload }) => {
   const payloadStatus = Number(payload?.status_code || payload?.status);
   const httpStatus = Number(response?.status || 0);
   const status = httpStatus >= 400 ? httpStatus : (payloadStatus >= 400 ? payloadStatus : 502);
-  const message = payload?.message || payload?.error || payload?.errors?.message || 'Shipping provider request failed.';
-  const error = Object.assign(new Error(String(message)), {
+  const rawMessage = payload?.message || payload?.error || payload?.errors?.message || 'Shipping provider request failed.';
+  const message = typeof rawMessage === 'string' ? rawMessage : JSON.stringify(redactProviderPayload(rawMessage));
+  const diagnostics = validationDiagnostics(payload);
+  const error = Object.assign(new Error(message), {
     status: 502,
     providerStatus: status,
     providerCode: payload?.code || payload?.error_code || payload?.status_code || '',
     providerBody: redactProviderPayload(payload),
+    validationErrors: diagnostics.validationErrors,
+    validationFields: diagnostics.validationFields,
     providerPath: (() => { try { return new URL(url).pathname; } catch { return ''; } })(),
     retryable: status === 429 || status >= 500
   });
@@ -64,7 +100,9 @@ const requestJson = async (url, options = {}, attempt = 0) => {
         attempts: attempt + 1,
         providerStatus: error.providerStatus,
         providerCode: error.providerCode,
-        providerBody: error.providerBody
+        providerBody: error.providerBody,
+        validationErrors: error.validationErrors,
+        validationFields: error.validationFields
       });
       throw error;
     }
@@ -131,7 +169,16 @@ export class ShiprocketProvider {
         logger.warn('shiprocket.token.refreshing', { path });
         return this.call(path, options, 1);
       }
-      logger.error('shiprocket.api.failed', { path, providerStatus: error.providerStatus, providerCode: error.providerCode, providerBody: error.providerBody, retryable: Boolean(error.retryable), error: error.message });
+      logger.error('shiprocket.api.failed', {
+        path,
+        providerStatus: error.providerStatus,
+        providerCode: error.providerCode,
+        providerBody: error.providerBody,
+        validationErrors: error.validationErrors,
+        validationFields: error.validationFields,
+        retryable: Boolean(error.retryable),
+        error: error.message
+      });
       throw error;
     }
   }
@@ -213,8 +260,28 @@ export class ShiprocketProvider {
     remote = remote ? { ...externalOrder, ...remote, providerOrderId: externalOrder?.providerOrderId } : externalOrder;
 
     if (!remote) {
+      let payload;
       try {
-        const payload = orderToShiprocket(order);
+        payload = orderToShiprocket(order);
+        const diagnosticPayload = redactProviderPayload(payload);
+        logger.info('shiprocket.order.payload', {
+          orderId: order.OrderID,
+          orderNumber: order.OrderNumber,
+          payloadJson: JSON.stringify(diagnosticPayload)
+        });
+        logger.info('shiprocket.order.payload.types', {
+          orderId: order.OrderID,
+          orderNumber: order.OrderNumber,
+          types: {
+            order_date: typeof payload.order_date,
+            sub_total: typeof payload.sub_total,
+            weight: typeof payload.weight,
+            length: typeof payload.length,
+            breadth: typeof payload.breadth,
+            height: typeof payload.height,
+            shipping_charges: typeof payload.shipping_charges
+          }
+        });
         validateShiprocketOrderPayload(payload);
         logger.info('shiprocket.order.payload.generated', {
           orderId: order.OrderID,
@@ -225,7 +292,18 @@ export class ShiprocketProvider {
           subTotal: payload.sub_total,
           package: { length: payload.length, breadth: payload.breadth, height: payload.height, weight: payload.weight }
         });
+        logger.info('shiprocket.final.payload', {
+          orderId: order.OrderID,
+          orderNumber: order.OrderNumber,
+          payloadJson: JSON.stringify(diagnosticPayload)
+        });
         const created = await this.call('/orders/create/adhoc', { method: 'POST', body: JSON.stringify(payload) });
+        logger.info('shiprocket.response', {
+          orderId: order.OrderID,
+          orderNumber: order.OrderNumber,
+          httpStatus: 200,
+          responseJson: JSON.stringify(redactProviderPayload(created))
+        });
         remote = {
           providerOrderId: created.order_id,
           providerShipmentId: created.shipment_id,
@@ -235,6 +313,18 @@ export class ShiprocketProvider {
         };
         logger.info('shiprocket.order.created', { orderId: order.OrderID, orderNumber: order.OrderNumber, providerOrderId: remote.providerOrderId, providerShipmentId: remote.providerShipmentId });
       } catch (error) {
+        if (error.providerStatus === 400 || error.providerStatus === 422) {
+          logger.error('shiprocket.order.validation_rejected', {
+            orderId: order.OrderID,
+            orderNumber: order.OrderNumber,
+            httpStatus: error.providerStatus,
+            providerCode: error.providerCode,
+            validationFields: error.validationFields,
+            validationErrorsJson: JSON.stringify(error.validationErrors),
+            responseJson: JSON.stringify(error.providerBody),
+            payloadJson: JSON.stringify(redactProviderPayload(payload))
+          });
+        }
         remote = await this.findByExternalOrderId(order.OrderNumber).catch(() => null);
         if (!remote) throw Object.assign(error, { safeToFallback: false, code: error.code || 'SHIPROCKET_CREATE_AMBIGUOUS' });
       }
@@ -604,6 +694,9 @@ export async function recoverPendingShipments(options = {}, dependencies = {}) {
           code: error.code || 'SHIPMENT_RECOVERY_FAILED',
           providerStatus: error.providerStatus,
           providerCode: error.providerCode,
+          providerBody: error.providerBody,
+          validationErrors: error.validationErrors,
+          validationFields: error.validationFields,
           error: error.message
         });
         log.error('shipping.recovery.order_failed', {
@@ -613,6 +706,8 @@ export async function recoverPendingShipments(options = {}, dependencies = {}) {
           providerStatus: error.providerStatus,
           providerCode: error.providerCode,
           providerBody: error.providerBody,
+          validationErrors: error.validationErrors,
+          validationFields: error.validationFields,
           retryable: Boolean(error.retryable),
           error: error.message
         });
@@ -717,27 +812,59 @@ const orderToShiprocket = (order) => ({
 });
 
 const validateShiprocketOrderPayload = (payload) => {
+  const validationErrors = {};
+  const addError = (field, message) => {
+    validationErrors[field] ||= [];
+    validationErrors[field].push(message);
+  };
   const requiredText = [
-    'order_id', 'order_date', 'pickup_location', 'billing_customer_name',
-    'billing_address', 'billing_city', 'billing_state', 'billing_country',
-    'billing_phone', 'payment_method'
+    'order_id',
+    'order_date',
+    'pickup_location',
+    'billing_customer_name',
+    'billing_phone',
+    'billing_address',
+    'billing_city',
+    'billing_state',
+    'billing_country',
+    'payment_method'
   ];
-  const missing = requiredText.filter((key) => !String(payload[key] || '').trim());
-  if (!/^\d{6}$/.test(String(payload.billing_pincode || ''))) missing.push('billing_pincode');
-  if (!Array.isArray(payload.order_items) || !payload.order_items.length) missing.push('order_items');
-  payload.order_items?.forEach((item, index) => {
-    if (!String(item.name || '').trim()) missing.push(`order_items[${index}].name`);
-    if (!String(item.sku || '').trim()) missing.push(`order_items[${index}].sku`);
-    if (!Number.isInteger(item.units) || item.units <= 0) missing.push(`order_items[${index}].units`);
-    if (!Number.isFinite(item.selling_price) || item.selling_price < 0) missing.push(`order_items[${index}].selling_price`);
+  requiredText.forEach((field) => {
+    if (!String(payload[field] ?? '').trim()) addError(field, `${field} is required.`);
   });
-  if (!Number.isFinite(payload.sub_total) || payload.sub_total <= 0) missing.push('sub_total');
-  if (![payload.length, payload.breadth, payload.height, payload.weight].every((value) => Number.isFinite(Number(value)) && Number(value) > 0)) missing.push('package_dimensions_or_weight');
-  if (missing.length) {
-    throw Object.assign(new Error(`Shiprocket order payload is invalid: ${[...new Set(missing)].join(', ')}`), {
+  if (typeof payload.order_date !== 'string') addError('order_date', 'order_date must be a string.');
+  if (!/^\d{6}$/.test(String(payload.billing_pincode ?? ''))) addError('billing_pincode', 'billing_pincode must contain exactly 6 digits.');
+  if (!['COD', 'Prepaid'].includes(payload.payment_method)) addError('payment_method', 'payment_method must be COD or Prepaid.');
+  if (typeof payload.shipping_charges !== 'number' || !Number.isFinite(payload.shipping_charges) || payload.shipping_charges < 0) {
+    addError('shipping_charges', 'shipping_charges must be a non-negative number.');
+  }
+  if (typeof payload.sub_total !== 'number' || !Number.isFinite(payload.sub_total) || payload.sub_total <= 0) {
+    addError('sub_total', 'sub_total must be a positive number.');
+  }
+  for (const field of ['length', 'breadth', 'height', 'weight']) {
+    if (typeof payload[field] !== 'number' || !Number.isFinite(payload[field]) || payload[field] <= 0) {
+      addError(field, `${field} must be a positive number.`);
+    }
+  }
+  if (!Array.isArray(payload.order_items) || !payload.order_items.length) addError('order_items', 'order_items must contain at least one item.');
+  payload.order_items?.forEach((item, index) => {
+    if (!String(item.name ?? '').trim()) addError(`order_items[${index}].name`, 'name is required.');
+    if (!String(item.sku ?? '').trim()) addError(`order_items[${index}].sku`, 'sku is required.');
+    if (typeof item.units !== 'number' || !Number.isInteger(item.units) || item.units <= 0) {
+      addError(`order_items[${index}].units`, 'units must be a positive integer.');
+    }
+    if (typeof item.selling_price !== 'number' || !Number.isFinite(item.selling_price) || item.selling_price < 0) {
+      addError(`order_items[${index}].selling_price`, 'selling_price must be a non-negative number.');
+    }
+  });
+  const validationFields = Object.keys(validationErrors);
+  if (validationFields.length) {
+    throw Object.assign(new Error(`Shiprocket order payload is invalid: ${validationFields.join(', ')}`), {
       code: 'SHIPROCKET_ORDER_PAYLOAD_INVALID',
       retryable: false,
-      safeToFallback: false
+      safeToFallback: false,
+      validationErrors,
+      validationFields
     });
   }
 };
