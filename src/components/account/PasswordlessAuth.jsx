@@ -11,13 +11,23 @@ import { customerService, apiMessage } from "../../services/customerService";
 import { useCustomerAuth } from "../../context/CustomerAuthContext";
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-const isPhone = (value) =>
-  /^(?:\+?91)?[6-9]\d{9}$/.test(value.replace(/[\s()-]/g, ""));
+const countryCodes = [
+  ["India", "+91"],
+  ["United States", "+1"],
+  ["United Kingdom", "+44"],
+  ["United Arab Emirates", "+971"],
+  ["Singapore", "+65"],
+  ["Australia", "+61"],
+  ["Canada", "+1"],
+];
+const phoneDigits = (value) => value.replace(/\D/g, "");
+const isPhone = (value) => /^\+[1-9]\d{7,14}$/.test(value);
 
 export default function PasswordlessAuth({ onComplete }) {
   const { completeAuthentication } = useCustomerAuth();
   const [step, setStep] = useState("identifier");
   const [identifier, setIdentifier] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
   const [challenge, setChallenge] = useState(null);
   const [digits, setDigits] = useState(Array(6).fill(""));
   const [error, setError] = useState("");
@@ -27,12 +37,18 @@ export default function PasswordlessAuth({ onComplete }) {
   const submitIdentifier = async (event) => {
     event.preventDefault();
     setError("");
-    if (!isEmail(identifier) && !isPhone(identifier))
+    const emailIdentifier = isEmail(identifier);
+    const normalizedIdentifier = emailIdentifier
+      ? identifier.trim().toLowerCase()
+      : identifier.trim().startsWith("+")
+        ? `+${phoneDigits(identifier)}`
+        : `${countryCode}${phoneDigits(identifier)}`;
+    if (!emailIdentifier && !isPhone(normalizedIdentifier))
       return setError("Enter a valid mobile number or email address.");
     setBusy(true);
     try {
-      const result = await customerService.beginOtp(identifier);
-      setChallenge({ ...result, identifier: identifier.trim() });
+      const result = await customerService.beginOtp(normalizedIdentifier);
+      setChallenge({ ...result, identifier: normalizedIdentifier });
       setStep("otp");
       setTimeout(() => refs.current[0]?.focus(), 100);
     } catch (err) {
@@ -104,18 +120,30 @@ export default function PasswordlessAuth({ onComplete }) {
           >
             Email address or WhatsApp number
           </label>
-          <div className="mt-2 flex h-14 items-center rounded-2xl border border-[#DED8CC] bg-[#FCFBF8] px-4 focus-within:border-[#1E4D3A] focus-within:ring-4 focus-within:ring-[#1E4D3A]/10">
+          <div className="mt-2 grid grid-cols-[118px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[#DED8CC] bg-[#FCFBF8] focus-within:border-[#1E4D3A] focus-within:ring-4 focus-within:ring-[#1E4D3A]/10">
+            <select
+              value={countryCode}
+              onChange={(event) => setCountryCode(event.target.value)}
+              aria-label="Phone country code"
+              className="h-14 border-r border-[#DED8CC] bg-transparent px-3 text-sm font-semibold outline-none"
+            >
+              {countryCodes.map(([country, code]) => (
+                <option key={`${country}-${code}`} value={code}>{code} {country}</option>
+              ))}
+            </select>
+            <div className="flex min-w-0 items-center px-4">
             <FiMail className="mr-3 shrink-0 text-[#9A7B3F]" />
             <input
               id="login-identifier"
               autoFocus
               autoComplete="username"
-              inputMode="email"
+              inputMode={identifier.includes("@") ? "email" : "text"}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder="Enter your email or WhatsApp number"
               className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#969B97]"
             />
+            </div>
           </div>
           <button
             disabled={busy}
