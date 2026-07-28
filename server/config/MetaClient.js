@@ -12,7 +12,42 @@ function parseBody(body) {
 
 function maskToken(token) {
   const value = String(token || '');
-  return value ? `Bearer ********${value.slice(-4)}` : 'Bearer [NOT_CONFIGURED]';
+  return value ? `${value.slice(0, 4)}************${value.slice(-4)}` : '[NOT_CONFIGURED]';
+}
+
+function maskRecipient(value) {
+  const recipient = String(value || '');
+  if (!recipient) return '[missing]';
+  const prefixLength = recipient.length > 10 ? recipient.length - 10 : Math.min(2, recipient.length);
+  return `${recipient.slice(0, prefixLength)}${'*'.repeat(Math.max(4, recipient.length - prefixLength - 4))}${recipient.slice(-4)}`;
+}
+
+function safeMessage(message, config) {
+  const copy = typeof message === 'object' && message !== null ? structuredClone(message) : message;
+  if (!copy || typeof copy !== 'object') return copy;
+  if (copy.to) copy.to = maskRecipient(copy.to);
+  if (copy.template?.name === config.whatsappAuthTemplate) {
+    for (const component of copy.template.components || []) {
+      for (const parameter of component.parameters || []) {
+        if ('text' in parameter) parameter.text = '[REDACTED_OTP]';
+      }
+    }
+  }
+  return copy;
+}
+
+function safeMetaPayload(payload) {
+  const copy = typeof payload === 'object' && payload !== null ? structuredClone(payload) : payload;
+  const visit = (value) => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+      if (/^(?:to|from|recipient_id|wa_id|input)$/i.test(key)) return [key, maskRecipient(item)];
+      if (/token|authorization|cookie|password|jwt|secret/i.test(key)) return [key, '[REDACTED]'];
+      return [key, visit(item)];
+    }));
+  };
+  return visit(copy);
 }
 
 function logOutgoingRequest({ config, path, options }) {
@@ -22,30 +57,25 @@ function logOutgoingRequest({ config, path, options }) {
   const body = template.components?.find((component) => component.type === 'body');
   const button = template.components?.find((component) => component.type === 'button');
   const authentication = template.name === config.whatsappAuthTemplate;
-  const loggedMessage = typeof message === 'object' ? structuredClone(message) : message;
-  if (authentication) {
-    for (const component of loggedMessage.template?.components || []) {
-      for (const parameter of component.parameters || []) {
-        if ('text' in parameter) parameter.text = '[REDACTED_AUTH_CODE]';
-      }
-    }
-  }
-  console.info('========== OUTGOING WHATSAPP REQUEST ==========');
-  console.info(JSON.stringify(loggedMessage, null, 2));
-  console.info(`Phone Number ID: ${config.whatsappPhoneNumberId}`);
-  console.info(`Meta API Version: ${config.metaApiVersion}`);
-  console.info(`Template: ${template.name || '[not a template request]'}`);
-  console.info(`Language: ${template.language?.code || '[not a template request]'}`);
-  console.info(`Recipient: ${message?.to ? `***${String(message.to).slice(-4)}` : '[missing]'}`);
-  console.info(`Authorization: ${maskToken(config.whatsappAccessToken)}`);
-  console.info(`WHATSAPP_OTP_TEMPLATE: ${config.whatsappAuthTemplate || '[missing]'}`);
-  console.info(`WHATSAPP_TEMPLATE_LANGUAGE: ${config.whatsappTemplateLanguage || '[missing]'}`);
-  console.info(`WHATSAPP_PHONE_NUMBER_ID: ${config.whatsappPhoneNumberId || '[missing]'}`);
-  console.info(`WHATSAPP_BUSINESS_ACCOUNT_ID: ${config.whatsappBusinessAccountId || '[missing]'}`);
-  console.info(`Resolved Template: ${template.name || '[not a template request]'}`);
-  console.info(`Resolved Language: ${template.language?.code || '[not a template request]'}`);
-  console.info(`Resolved Parameter Count: ${body?.parameters?.length || 0}`);
-  console.info(`Resolved Button Parameter Count: ${button?.parameters?.length || 0}`);
+  console.info('========================================');
+  console.info('WHATSAPP REQUEST');
+  console.info('========================================');
+  console.info({
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    apiVersion: config.metaApiVersion,
+    phoneNumberId: config.whatsappPhoneNumberId,
+    wabaId: config.whatsappBusinessAccountId,
+    endpoint: `https://graph.facebook.com/${config.metaApiVersion}/${path}`,
+    template: template.name || null,
+    language: template.language?.code || null,
+    recipient: maskRecipient(message?.to),
+    recipientAfterNormalization: maskRecipient(String(message?.to || '').replace(/^\+/, '')),
+    authorization: maskToken(config.whatsappAccessToken),
+    bodyParameterCount: body?.parameters?.length || 0,
+    buttonParameterCount: button?.parameters?.length || 0,
+    payload: safeMessage(message, config)
+  });
   if (authentication) {
     const issues = [];
     if (template.language?.code !== (config.whatsappAuthTemplateLanguage || config.whatsappTemplateLanguage)) issues.push('Resolved language differs from the configured Authentication template language.');
@@ -57,21 +87,43 @@ function logOutgoingRequest({ config, path, options }) {
     console.info(`Authentication Payload Audit: ${issues.length ? 'MISMATCH' : 'MATCH'}`);
     issues.forEach((issue) => console.info(`Authentication Payload Issue: ${issue}`));
   }
-  console.info('===============================================');
+  console.info('========================================');
 }
 
-function logMetaError(response, payload, rawPayload) {
+function logMetaResponse(response, payload) {
+  console.info('========================================');
+  console.info('META RESPONSE');
+  console.info('========================================');
+  console.info({
+    timestamp: new Date().toISOString(),
+    status: response.status,
+    data: safeMetaPayload(payload),
+    messageId: payload?.messages?.[0]?.id || null
+  });
+  console.info('========================================');
+}
+
+function logMetaError(response, payload, rawPayload, { config, path, options }) {
   const meta = payload?.error || {};
-  console.error('========== META RESPONSE ==========');
-  console.error(rawPayload || JSON.stringify(payload, null, 2));
-  console.error(`Status Code: ${response.status}`);
-  console.error(`Meta Error Code: ${meta.code ?? '[missing]'}`);
-  console.error(`Meta Error Type: ${meta.type ?? '[missing]'}`);
-  console.error(`Meta Error Message: ${meta.message ?? '[missing]'}`);
-  console.error(`Meta Error Details: ${JSON.stringify(meta.error_data ?? meta.details ?? {})}`);
-  console.error(`Meta Error Subcode: ${meta.error_subcode ?? '[missing]'}`);
-  console.error(`FB Trace ID: ${meta.fbtrace_id ?? '[missing]'}`);
-  console.error('===================================');
+  const message = parseBody(options.body);
+  console.error('========================================');
+  console.error('META ERROR');
+  console.error('========================================');
+  console.error({
+    timestamp: new Date().toISOString(),
+    endpoint: `https://graph.facebook.com/${config.metaApiVersion}/${path}`,
+    status: response.status,
+    response: safeMetaPayload(payload),
+    rawResponse: rawPayload || JSON.stringify(payload),
+    metaCode: meta.code ?? null,
+    metaSubcode: meta.error_subcode ?? null,
+    type: meta.type ?? null,
+    message: meta.message ?? null,
+    details: meta.error_data ?? meta.details ?? null,
+    fbtraceId: meta.fbtrace_id ?? null,
+    payload: safeMessage(message, config)
+  });
+  console.error('========================================');
 }
 
 function mapMetaError(metaCode, status) {
@@ -121,12 +173,15 @@ export class MetaClient {
           }
         } catch {}
         if (!response.ok) {
-          logMetaError(response, payload, rawPayload);
+          logMetaError(response, payload, rawPayload, { config: this.config, path, options });
           const mapped = mapMetaError(Number(payload?.error?.code || 0), response.status);
           const error = new AppError(mapped.message, { status: mapped.status, code: mapped.code, details: { retryable: mapped.retryable, metaCode: Number(payload?.error?.code || 0) || undefined }, expose: true });
           if (!mapped.retryable || attempt >= retries) throw error;
           lastError = error;
-        } else return payload;
+        } else {
+          logMetaResponse(response, payload);
+          return payload;
+        }
       } catch (error) {
         if (error instanceof AppError && !error.details?.retryable) throw error;
         const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
