@@ -5,6 +5,7 @@ import { FiInstagram } from 'react-icons/fi';
 import Seo from '../components/Seo.jsx';
 import { contentService } from '../services/contentService';
 import { useToast } from '../context/ToastContext';
+import useMetaTracking from '../analytics/useMetaTracking.js';
 
 const reveal = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
 const message = encodeURIComponent("Hello LitePuff! I'm interested in your products and would like more information.");
@@ -20,7 +21,8 @@ function Field({ label, name, type = 'text', required = false }) { return <label
 export default function Contact() {
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
-  const submit = async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); setLoading(true); try { await contentService.contact({ name: data.get('name'), email: data.get('email'), phone: data.get('phone'), subject: data.get('subject'), message: data.get('message') }); form.reset(); showToast('Message sent successfully.'); } catch { showToast('Unable to send your message.', 'error'); } finally { setLoading(false); } };
+  const { trackContact } = useMetaTracking();
+  const submit = async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); setLoading(true); try { await contentService.contact({ name: data.get('name'), email: data.get('email'), phone: data.get('phone'), subject: data.get('subject'), message: data.get('message') }); try { trackContact({ subject: data.get('subject') }); } catch { /* Analytics is optional. */ } form.reset(); showToast('Message sent successfully.'); } catch { showToast('Unable to send your message.', 'error'); } finally { setLoading(false); } };
   return <><Seo title="Let's Talk" description="Contact LitePuff for product questions, order support and feedback." path="/contact" /><main className="bg-[#FAF8F2]">
     <header className="px-6 py-12 text-center md:py-16 lg:px-8"><motion.div className="mx-auto max-w-4xl" initial="hidden" animate="visible" variants={reveal}><p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#C89B3C]">Let&apos;s Talk</p><h1 className="mt-3 font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.04em] text-[#243029] md:text-[58px]">We&apos;re Always Happy<br />to Hear From You</h1><p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#5F6762]">Questions, feedback or just saying hello—our team is here to help.</p></motion.div></header>
 

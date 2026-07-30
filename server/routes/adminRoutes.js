@@ -42,6 +42,7 @@ import { authLimiter } from '../middleware/securityMiddleware.js';
 import { adminCancelShipment, adminCreateShipment, adminRecoverShipments, adminTrackShipment } from '../controllers/shippingController.js';
 import { PERMISSIONS } from '../config/auth.js';
 import adminWhatsAppRoutes from './adminWhatsAppRoutes.js';
+import { deleteAdminProductReview, getAdminProductReviews, moderateProductReview, replyToReview } from '../controllers/productReviewController.js';
 
 const router = express.Router();
 const handle = (controller) => (request, response, next) => Promise.resolve(controller(request, response, next)).catch(next);
@@ -77,9 +78,10 @@ router.put('/customers/:id/status', requirePermission(PERMISSIONS.ADMIN_CUSTOMER
 router.get('/inventory', requirePermission(PERMISSIONS.ADMIN_INVENTORY_READ), handle(getAdminInventory));
 router.put('/inventory/:id', requirePermission(PERMISSIONS.ADMIN_INVENTORY_MANAGE), activityLogger('Inventory Updated', 'Inventory', (request) => ({ id: request.params.id })), handle(updateAdminInventory));
 
-router.get('/reviews', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), handle(getAdminReviews));
-router.put('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Moderated', 'Reviews', (request) => ({ id: request.params.id, status: request.body.status })), handle(updateAdminReview));
-router.delete('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Deleted', 'Reviews', (request) => ({ id: request.params.id })), handle(deleteAdminReview));
+router.get('/reviews', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), handle(getAdminProductReviews));
+router.patch('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Moderated', 'Reviews', (request) => ({ id: request.params.id, status: request.body.status })), handle(moderateProductReview));
+router.post('/reviews/:id/reply', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), handle(replyToReview));
+router.delete('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Deleted', 'Reviews', (request) => ({ id: request.params.id })), handle(deleteAdminProductReview));
 
 router.get('/blogs', requirePermission(PERMISSIONS.ADMIN_BLOGS_READ), handle(getAdminBlogs));
 router.post('/blogs', requirePermission(PERMISSIONS.ADMIN_BLOGS_MANAGE), activityLogger('Blog Created', 'Blogs'), handle(createAdminBlog));

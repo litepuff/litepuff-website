@@ -16,7 +16,7 @@ const normalizePrice = (item) => ({
 
 export function CartProvider({ children }) {
   const { customer } = useCustomerAuth();
-  const { trackAddToCart } = useMetaTracking();
+  const { trackAddToCart, trackRemoveFromCart } = useMetaTracking();
   const [cartItems, setCartItems] = useState(() => {
     return JSON.parse(localStorage.getItem('everydayMakhanaCart') || '[]').map(normalizePrice);
   });
@@ -52,10 +52,20 @@ export function CartProvider({ children }) {
   }
 
   function updateQuantity(productId, quantity) {
+    const removedItem = quantity <= 0
+      ? cartItems.find((item) => item.id === productId)
+      : null;
     const nextItems = cartItems
       .map((item) => (item.id === productId ? { ...item, quantity } : item))
       .filter((item) => item.quantity > 0);
     saveCart(nextItems);
+    if (removedItem) {
+      try {
+        trackRemoveFromCart(removedItem, removedItem.quantity);
+      } catch {
+        // Analytics is optional and must never affect cart behavior.
+      }
+    }
   }
 
   function clearCart() {

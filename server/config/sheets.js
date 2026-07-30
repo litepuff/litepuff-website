@@ -4,6 +4,8 @@ export const SHEET_NAMES = Object.freeze({
   ADDRESSES: 'ADDRESSES', ORDERS: 'ORDERS', ORDER_ITEMS: 'ORDER_ITEMS',
   PAYMENTS: 'PAYMENTS', ORDER_TRACKING: 'ORDER_TRACKING', COUPONS: 'COUPONS',
   BLOGS: 'BLOGS', BLOG_CATEGORIES: 'BLOG_CATEGORIES', FAQ: 'FAQ', REVIEWS: 'REVIEWS',
+  PRODUCT_REVIEWS: 'PRODUCT_REVIEWS', REVIEW_REPLIES: 'REVIEW_REPLIES',
+  REVIEW_HELPFUL: 'REVIEW_HELPFUL', REVIEW_REPORTS: 'REVIEW_REPORTS',
   CONTACT_MESSAGES: 'CONTACT_MESSAGES', NEWSLETTER: 'NEWSLETTER', SETTINGS: 'SETTINGS',
   SHIPMENTS: 'SHIPMENTS', NOTIFICATIONS: 'NOTIFICATIONS', AUTH_AUDIT: 'AUTH_AUDIT', SESSIONS: 'SESSIONS', OTP_CHALLENGES: 'OTP_CHALLENGES', IDENTITY_VERIFICATIONS: 'IDENTITY_VERIFICATIONS',
   WHATSAPP_CONVERSATIONS: 'WHATSAPP_CONVERSATIONS', WHATSAPP_SESSIONS: 'WHATSAPP_SESSIONS',
@@ -28,6 +30,10 @@ export const SHEET_SCHEMAS = Object.freeze({
   BLOG_CATEGORIES: ['CategoryID', 'Name', 'Slug'],
   FAQ: ['FAQID', 'Category', 'Question', 'Answer', 'SortOrder', 'Status'],
   REVIEWS: ['ReviewID', 'CustomerID', 'OrderID', 'ProductID', 'Rating', 'Title', 'Review', 'Status', 'CreatedAt'],
+  PRODUCT_REVIEWS: ['reviewId', 'productId', 'orderId', 'customerId', 'customerName', 'customerPhoto', 'rating', 'tasteRating', 'freshnessRating', 'packagingRating', 'valueRating', 'crunchinessRating', 'title', 'review', 'images', 'video', 'verifiedPurchase', 'helpfulCount', 'status', 'featured', 'createdAt', 'updatedAt'],
+  REVIEW_REPLIES: ['replyId', 'reviewId', 'adminName', 'reply', 'createdAt'],
+  REVIEW_HELPFUL: ['reviewId', 'customerId', 'createdAt'],
+  REVIEW_REPORTS: ['reportId', 'reviewId', 'customerId', 'reason', 'status', 'createdAt'],
   CONTACT_MESSAGES: ['MessageID', 'Name', 'Email', 'Phone', 'Subject', 'Message', 'CreatedAt', 'Status'],
   NEWSLETTER: ['SubscriberID', 'Email', 'SubscribedAt', 'Status'],
   SETTINGS: ['SettingID', 'Key', 'Value', 'Type', 'UpdatedAt'],
@@ -61,6 +67,10 @@ export const SHEET_RULES = Object.freeze({
   BLOGS: { primaryKey: 'BlogID', unique: [['Slug']] }, BLOG_CATEGORIES: { primaryKey: 'CategoryID', unique: [['Slug']] },
   FAQ: { primaryKey: 'FAQID', numeric: ['SortOrder'] },
   REVIEWS: { primaryKey: 'ReviewID', unique: [['CustomerID', 'OrderID', 'ProductID']], foreign: { CustomerID: ['CUSTOMERS', 'CustomerID'], OrderID: ['ORDERS', 'OrderID'], ProductID: ['PRODUCTS', 'ProductID'] }, numeric: ['Rating'] },
+  PRODUCT_REVIEWS: { primaryKey: 'reviewId', unique: [['customerId', 'productId']], foreign: { customerId: ['CUSTOMERS', 'CustomerID'], productId: ['PRODUCTS', 'ProductID'] }, numeric: ['rating', 'tasteRating', 'freshnessRating', 'packagingRating', 'valueRating', 'crunchinessRating', 'helpfulCount'] },
+  REVIEW_REPLIES: { primaryKey: 'replyId', foreign: { reviewId: ['PRODUCT_REVIEWS', 'reviewId'] } },
+  REVIEW_HELPFUL: { primaryKey: 'createdAt', unique: [['reviewId', 'customerId']], foreign: { reviewId: ['PRODUCT_REVIEWS', 'reviewId'], customerId: ['CUSTOMERS', 'CustomerID'] } },
+  REVIEW_REPORTS: { primaryKey: 'reportId', unique: [['reviewId', 'customerId']], foreign: { reviewId: ['PRODUCT_REVIEWS', 'reviewId'], customerId: ['CUSTOMERS', 'CustomerID'] } },
   CONTACT_MESSAGES: { primaryKey: 'MessageID', email: ['Email'], phone: ['Phone'] }, NEWSLETTER: { primaryKey: 'SubscriberID', unique: [['Email']], email: ['Email'] },
   SETTINGS: { primaryKey: 'SettingID', unique: [['Key']] }, SHIPMENTS: { primaryKey: 'ShipmentID', foreign: { OrderID: ['ORDERS', 'OrderID'] } },
   NOTIFICATIONS: { primaryKey: 'NotificationID' }, AUTH_AUDIT: { primaryKey: 'AuditID' },
@@ -76,7 +86,8 @@ export const SHEET_RULES = Object.freeze({
 
 export const SHEET_DEPENDENCIES = Object.freeze({
   CUSTOMERS: [['CART', 'CustomerID'], ['WISHLIST', 'CustomerID'], ['ADDRESSES', 'CustomerID'], ['ORDERS', 'CustomerID'], ['PAYMENTS', 'CustomerID'], ['REVIEWS', 'CustomerID'], ['SESSIONS', 'CustomerID'], ['IDENTITY_VERIFICATIONS', 'CustomerID'], ['WHATSAPP_CONVERSATIONS', 'CustomerID'], ['WHATSAPP_SESSIONS', 'CustomerID'], ['WHATSAPP_MESSAGES', 'CustomerID']],
-  PRODUCTS: [['PRODUCT_IMAGES', 'ProductID'], ['INVENTORY', 'ProductID'], ['CART', 'ProductID'], ['WISHLIST', 'ProductID'], ['ORDER_ITEMS', 'ProductID'], ['REVIEWS', 'ProductID']],
+  PRODUCTS: [['PRODUCT_IMAGES', 'ProductID'], ['INVENTORY', 'ProductID'], ['CART', 'ProductID'], ['WISHLIST', 'ProductID'], ['ORDER_ITEMS', 'ProductID'], ['REVIEWS', 'ProductID'], ['PRODUCT_REVIEWS', 'productId']],
+  PRODUCT_REVIEWS: [['REVIEW_REPLIES', 'reviewId'], ['REVIEW_HELPFUL', 'reviewId'], ['REVIEW_REPORTS', 'reviewId']],
   ADDRESSES: [['ORDERS', 'AddressID']], ORDERS: [['ORDER_ITEMS', 'OrderID'], ['PAYMENTS', 'OrderID'], ['ORDER_TRACKING', 'OrderID'], ['SHIPMENTS', 'OrderID'], ['REVIEWS', 'OrderID']]
 });
 

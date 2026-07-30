@@ -12,6 +12,7 @@ import {
 } from "react-icons/fi";
 import Seo from "../components/Seo.jsx";
 import { useCart } from "../context/CartContext.jsx";
+import useMetaTracking from "../analytics/useMetaTracking.js";
 import { formatMoney } from "../utils/formatMoney.js";
 import periPeriImage from "../assets/images/products/peri-peri.png";
 import mintImage from "../assets/images/products/mint.png";
@@ -372,6 +373,7 @@ const UpcomingCard = memo(function UpcomingCard({ product }) {
 
 export default function Shop() {
   const { addToCart } = useCart();
+  const { trackViewCategory } = useMetaTracking();
   const { products: sheetProducts } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -379,6 +381,16 @@ export default function Shop() {
   const [flavourFilter, setFlavourFilter] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+  const selectFilter = (setter, filterName, currentValue) => (event) => {
+    const nextValue = event.target.value;
+    if (nextValue === currentValue) return;
+    setter(nextValue);
+    try {
+      trackViewCategory(`${filterName}:${nextValue}`);
+    } catch {
+      // Analytics is optional and must never affect filtering.
+    }
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchQuery), 300);
@@ -557,7 +569,7 @@ export default function Shop() {
                 <FilterSelect
                   label="Filter by flavour"
                   value={flavourFilter}
-                  onChange={(event) => setFlavourFilter(event.target.value)}
+                  onChange={selectFilter(setFlavourFilter, "flavour", flavourFilter)}
                 >
                   <option value="all">All Flavours</option>
                   {shopProducts.map((product) => (
@@ -569,7 +581,7 @@ export default function Shop() {
                 <FilterSelect
                   label="Filter by price"
                   value={priceFilter}
-                  onChange={(event) => setPriceFilter(event.target.value)}
+                  onChange={selectFilter(setPriceFilter, "price", priceFilter)}
                 >
                   <option value="all">Price</option>
                   <option value="200-300">₹200–₹300</option>
@@ -577,7 +589,7 @@ export default function Shop() {
                 <FilterSelect
                   label="Filter by availability"
                   value={stockFilter}
-                  onChange={(event) => setStockFilter(event.target.value)}
+                  onChange={selectFilter(setStockFilter, "availability", stockFilter)}
                 >
                   <option value="all">Availability</option>
                   <option value="in">In Stock</option>

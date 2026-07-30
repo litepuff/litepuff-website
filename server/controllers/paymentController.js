@@ -30,6 +30,8 @@ import {
   preferredShippingProvider,
 } from "../services/shippingService.js";
 import { logger } from "../utils/logger.js";
+import { metaConversionService } from "../services/meta/MetaConversionService.js";
+import { env } from "../config/env.js";
 
 export const createPaymentValidators = [
   body("address").isObject(),
@@ -124,8 +126,48 @@ const schedulePostPaymentTasks = ({
     () => notifyPaymentSuccess(order, payment, context),
     context,
   );
-
-  // Future optional Meta CAPI execution belongs here so it cannot delay payment.
+  const transactionId =
+    payment.TransactionReference ||
+    payment.RazorpayPaymentID ||
+    payment.PaymentID;
+  scheduleBackgroundTask(
+    "meta.capi.purchase",
+    async () => {
+      const customer = (await getRows("CUSTOMERS"))
+        .find((row) => row.CustomerID === order.CustomerID);
+      const nameParts = String(snapshot.address.fullName || '').trim().split(/\s+/);
+      const firstName = customer?.FirstName || nameParts.shift() || '';
+      const lastName = customer?.LastName || nameParts.join(' ');
+      return metaConversionService.purchase({
+        eventId: `purchase-${transactionId}`,
+        eventSourceUrl: `${env.clientUrl}/order-success/${order.OrderID}`,
+        userData: {
+          externalId: order.CustomerID,
+          email: customer?.Email,
+          phone: snapshot.address.phone || customer?.Phone,
+          firstName,
+          lastName,
+          city: snapshot.address.city,
+          state: snapshot.address.state,
+          country: snapshot.address.country,
+          zip: snapshot.address.pincode,
+        },
+        customData: {
+          order_id: order.OrderID,
+          currency: payment.Currency || snapshot.currency || 'INR',
+          value: Number(payment.Amount || order.GrandTotal || snapshot.grandTotal),
+          content_type: 'product',
+          content_ids: snapshot.items.map((item) => item.productId),
+          contents: snapshot.items.map((item) => ({
+            id: item.productId,
+            quantity: Number(item.quantity || 1),
+            item_price: Number(item.price || 0),
+          })),
+        },
+      }, context);
+    },
+    context,
+  );
 };
 
 function publicPayment(row) {

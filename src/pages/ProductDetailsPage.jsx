@@ -18,6 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { contentService } from '../services/contentService';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import useMetaTracking from '../analytics/useMetaTracking.js';
+import ProductReviews from '../components/reviews/ProductReviews.jsx';
 
 const productImages = {
   Cheese: cheeseImage,
@@ -282,7 +283,7 @@ export default function ProductDetailsPage() {
   const { slug } = useParams();
   const { addToCart } = useCart();
   const { showToast } = useToast();
-  const { trackViewContent } = useMetaTracking();
+  const { trackViewContent, trackAddToWishlist } = useMetaTracking();
   const trackedProductIdsRef = useRef(new Set());
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
@@ -350,7 +351,7 @@ export default function ProductDetailsPage() {
 
   return (
     <>
-      <Seo title={product.name} description={product.shortDescription} path={`/products/${product.slug}`} image={image} />
+      <Seo title={product.name} description={product.shortDescription} path={`/products/${product.slug}`} image={image} structuredData={{ '@context': 'https://schema.org', '@type': 'Product', name: product.name, image, description: product.shortDescription, sku: product.id, offers: { '@type': 'Offer', priceCurrency: 'INR', price: product.price, availability: 'https://schema.org/InStock' }, ...(reviewSummary.count ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: reviewSummary.averageRating, reviewCount: reviewSummary.count } } : {}) }} />
       <main className="bg-[#FAF8F2] pb-12 text-brand-text md:pb-[60px] lg:pb-20">
         <div className="container-page pt-6"><OnlinePaymentOffer /></div>
         {/* Breadcrumb */}
@@ -407,6 +408,7 @@ export default function ProductDetailsPage() {
                       const result = await customerService.addWishlist(product.id);
                       setWishlisted(true);
                       setWishlistItemId(result.item?.id || '');
+                      try { trackAddToWishlist(product); } catch { /* Analytics is optional. */ }
                       showToast('Added to wishlist.');
                     } else {
                       if (wishlistItemId) await customerService.removeWishlist(wishlistItemId);
@@ -434,6 +436,8 @@ export default function ProductDetailsPage() {
 
           {/* Product information */}
           {label && <ProductInformationGrid label={label} />}
+
+          <ProductReviews product={product} onSummary={setReviewSummary} />
 
           {/* Related products */}
           <motion.section {...reveal}>

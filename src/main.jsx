@@ -14,13 +14,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HelmetProvider>
       <BrowserRouter>
-        <MetaPixelProvider>
-          <AuthProvider>
-            <CustomerAuthProvider>
+        <AuthProvider>
+          <CustomerAuthProvider>
+            <MetaPixelProvider>
               <ToastProvider><CartProvider><App /></CartProvider></ToastProvider>
-            </CustomerAuthProvider>
-          </AuthProvider>
-        </MetaPixelProvider>
+            </MetaPixelProvider>
+          </CustomerAuthProvider>
+        </AuthProvider>
       </BrowserRouter>
     </HelmetProvider>
   </React.StrictMode>

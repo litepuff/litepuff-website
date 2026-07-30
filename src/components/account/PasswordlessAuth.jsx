@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { FiArrowLeft, FiCheck, FiLoader, FiMail, FiMessageCircle } from "react-icons/fi";
 import { customerService, apiMessage } from "../../services/customerService";
 import { useCustomerAuth } from "../../context/CustomerAuthContext";
+import useMetaTracking from "../../analytics/useMetaTracking.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_LIMIT_CODES = new Set(["OTP_GENERATION_LIMIT", "OTP_REQUEST_RATE_LIMIT"]);
@@ -31,6 +32,7 @@ function friendlyError(error) {
 
 export default function PasswordlessAuth({ onComplete }) {
   const { completeAuthentication } = useCustomerAuth();
+  const { trackCompleteRegistration } = useMetaTracking();
   const [step, setStep] = useState("method");
   const [mode, setMode] = useState("login");
   const [provider, setProvider] = useState("");
@@ -128,6 +130,9 @@ export default function PasswordlessAuth({ onComplete }) {
         ? { firstName: parts.shift() || "", lastName: parts.join(" ") }
         : {});
       await completeAuthentication(result);
+      if (mode === "signup") {
+        try { trackCompleteRegistration({ method: provider }); } catch { /* Analytics is optional. */ }
+      }
       setStep("complete");
       onComplete?.();
     } catch (verificationError) {

@@ -125,8 +125,9 @@ export default function Checkout() {
   const { customer } = useCustomerAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { trackPurchase } = useMetaTracking();
+  const { trackPurchase, trackAddPaymentInfo } = useMetaTracking();
   const purchaseTrackedRef = useRef(false);
+  const paymentInfoTrackedRef = useRef(false);
   const [address, setAddress] = useState({
     fullName: customer
       ? `${customer.firstName || ""} ${customer.lastName || ""}`.trim()
@@ -164,6 +165,18 @@ export default function Checkout() {
   const selectPaymentMethod = (method) => {
     setPaymentMethod(method);
     setServerPricing(null);
+    if (!paymentInfoTrackedRef.current) {
+      paymentInfoTrackedRef.current = true;
+      try {
+        trackAddPaymentInfo({
+          items: cartItems,
+          value: totals.grandTotal,
+          paymentMethod: method,
+        });
+      } catch {
+        // Analytics is optional and must never affect checkout.
+      }
+    }
     if (method === "cod") {
       setAppliedCoupon(null);
       setCoupon("");

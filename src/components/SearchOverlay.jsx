@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FiSearch, FiX } from 'react-icons/fi';
 import { contentService } from '../services/contentService';
+import useMetaTracking from '../analytics/useMetaTracking.js';
 
 export default function SearchOverlay({ open, onClose }) {
+  const { trackSearch } = useMetaTracking();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({ products: [], blogs: [], faqs: [] });
   const [selected, setSelected] = useState(0);
@@ -26,11 +28,16 @@ export default function SearchOverlay({ open, onClose }) {
       if (event.key === 'Escape') onClose();
       if (event.key === 'ArrowDown') { event.preventDefault(); setSelected((value) => Math.min(value + 1, Math.max(flat.length - 1, 0))); }
       if (event.key === 'ArrowUp') { event.preventDefault(); setSelected((value) => Math.max(value - 1, 0)); }
-      if (event.key === 'Enter' && flat[selected]) window.location.href = flat[selected].to;
+      if (event.key === 'Enter' && flat[selected]) {
+        event.preventDefault();
+        remember();
+        try { trackSearch(query); } catch { /* Analytics is optional. */ }
+        window.location.href = flat[selected].to;
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, flat, selected, onClose]);
+  }, [open, flat, selected, onClose, query, recent, trackSearch]);
 
   const remember = () => {
     if (!query.trim()) return;
@@ -52,7 +59,7 @@ export default function SearchOverlay({ open, onClose }) {
             {!query && recent.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{recent.map((item) => <button key={item} onClick={() => setQuery(item)} className="rounded-full border border-[#ECE7DD] bg-white px-4 py-2 text-sm">{item}</button>)}</div>}
             <div className="mt-5 max-h-[55vh] overflow-y-auto">
               {query && flat.length === 0 ? <div className="rounded-2xl bg-white p-8 text-center text-[#6B726D]">No results found.</div> : flat.map((item, index) => (
-                <Link key={`${item.type}-${item.label}`} to={item.to} onClick={() => { remember(); onClose(); }} className={`mb-2 flex items-center justify-between rounded-2xl border p-4 text-sm ${selected === index ? 'border-[#1E4D3A] bg-white' : 'border-[#ECE7DD] bg-white/70'}`}>
+                <Link key={`${item.type}-${item.label}`} to={item.to} onClick={() => { remember(); try { trackSearch(query); } catch { /* Analytics is optional. */ } onClose(); }} className={`mb-2 flex items-center justify-between rounded-2xl border p-4 text-sm ${selected === index ? 'border-[#1E4D3A] bg-white' : 'border-[#ECE7DD] bg-white/70'}`}>
                   <span>{item.label}</span><span className="text-xs font-bold uppercase tracking-[0.16em] text-[#C89B3C]">{item.type}</span>
                 </Link>
               ))}

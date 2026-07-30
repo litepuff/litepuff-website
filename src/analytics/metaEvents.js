@@ -6,6 +6,11 @@ export const META_EVENTS = Object.freeze({
   PURCHASE: 'Purchase',
   SEARCH: 'Search',
   VIEW_CATEGORY: 'ViewCategory',
+  REMOVE_FROM_CART: 'RemoveFromCart',
+  ADD_PAYMENT_INFO: 'AddPaymentInfo',
+  ADD_TO_WISHLIST: 'AddToWishlist',
+  COMPLETE_REGISTRATION: 'CompleteRegistration',
+  CONTACT: 'Contact',
 });
 
 export const META_CURRENCY = 'INR';
