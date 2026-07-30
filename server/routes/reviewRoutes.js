@@ -2,12 +2,13 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { protectCustomerRoute, protectAdminRoute, requirePermission } from '../middleware/authMiddleware.js';
 import { PERMISSIONS } from '../config/auth.js';
-import { deleteProductReview, markHelpful, moderateProductReview, replyToReview, reportReview, updateProductReview } from '../controllers/productReviewController.js';
+import { deleteProductReview, getOwnProductReviews, markHelpful, moderateProductReview, replyToReview, reportReview, updateProductReview } from '../controllers/productReviewController.js';
 
 const router = express.Router();
 const handle = (controller) => (request, response, next) => Promise.resolve(controller(request, response, next)).catch(next);
 const mutationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 
+router.get('/mine', protectCustomerRoute, handle(getOwnProductReviews));
 router.put('/:id', protectCustomerRoute, mutationLimiter, handle(updateProductReview));
 router.delete('/:id', protectCustomerRoute, mutationLimiter, handle(deleteProductReview));
 router.post('/:id/helpful', protectCustomerRoute, mutationLimiter, handle(markHelpful));

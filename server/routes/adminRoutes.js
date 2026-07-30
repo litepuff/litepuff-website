@@ -79,7 +79,7 @@ router.get('/inventory', requirePermission(PERMISSIONS.ADMIN_INVENTORY_READ), ha
 router.put('/inventory/:id', requirePermission(PERMISSIONS.ADMIN_INVENTORY_MANAGE), activityLogger('Inventory Updated', 'Inventory', (request) => ({ id: request.params.id })), handle(updateAdminInventory));
 
 router.get('/reviews', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), handle(getAdminProductReviews));
-router.patch('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Moderated', 'Reviews', (request) => ({ id: request.params.id, status: request.body.status })), handle(moderateProductReview));
+router.patch('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Moderated', 'Reviews', (request) => ({ id: request.params.id, action: request.body.action })), handle(moderateProductReview));
 router.post('/reviews/:id/reply', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), handle(replyToReview));
 router.delete('/reviews/:id', requirePermission(PERMISSIONS.ADMIN_REVIEWS_MANAGE), activityLogger('Review Deleted', 'Reviews', (request) => ({ id: request.params.id })), handle(deleteAdminProductReview));
 

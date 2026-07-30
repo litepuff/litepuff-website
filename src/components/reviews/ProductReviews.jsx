@@ -70,6 +70,12 @@ export default function ProductReviews({ product, onSummary }) {
   const load = useCallback(async () => { setLoading(true); try { const result = await reviewService.list(product.id, query); setReviews((current) => query.page > 1 ? [...current, ...result.reviews] : result.reviews); setPagination(result.pagination); } catch { showToast('Reviews could not be loaded.', 'error'); } finally { setLoading(false); } }, [product.id, query, showToast]);
   const loadSummary = useCallback(async () => { const result = await reviewService.summary(product.id); setSummary(result); onSummary?.(result); }, [product.id, onSummary]);
   useEffect(() => { load(); }, [load]); useEffect(() => { loadSummary(); }, [loadSummary]);
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) { load(); loadSummary(); } };
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener('focus', refresh); };
+  }, [load, loadSummary]);
   const change = (next) => setQuery((current) => ({ ...current, page: 1, ...next }));
   const signedIn = () => { if (customer) return true; showToast('Please sign in to continue.', 'info'); navigate('/login'); return false; };
   return <section id="product-reviews" aria-labelledby="reviews-title">

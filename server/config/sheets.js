@@ -30,7 +30,7 @@ export const SHEET_SCHEMAS = Object.freeze({
   BLOG_CATEGORIES: ['CategoryID', 'Name', 'Slug'],
   FAQ: ['FAQID', 'Category', 'Question', 'Answer', 'SortOrder', 'Status'],
   REVIEWS: ['ReviewID', 'CustomerID', 'OrderID', 'ProductID', 'Rating', 'Title', 'Review', 'Status', 'CreatedAt'],
-  PRODUCT_REVIEWS: ['reviewId', 'productId', 'orderId', 'customerId', 'customerName', 'customerPhoto', 'rating', 'tasteRating', 'freshnessRating', 'packagingRating', 'valueRating', 'crunchinessRating', 'title', 'review', 'images', 'video', 'verifiedPurchase', 'helpfulCount', 'status', 'featured', 'createdAt', 'updatedAt'],
+  PRODUCT_REVIEWS: ['reviewId', 'productId', 'orderId', 'customerId', 'customerName', 'customerPhoto', 'rating', 'tasteRating', 'freshnessRating', 'packagingRating', 'valueRating', 'crunchinessRating', 'title', 'review', 'images', 'video', 'verifiedPurchase', 'helpfulCount', 'status', 'featured', 'createdAt', 'updatedAt', 'approvedBy', 'approvedAt', 'rejectedReason', 'hidden', 'deleted', 'spam', 'adminReply', 'adminReplyDate'],
   REVIEW_REPLIES: ['replyId', 'reviewId', 'adminName', 'reply', 'createdAt'],
   REVIEW_HELPFUL: ['reviewId', 'customerId', 'createdAt'],
   REVIEW_REPORTS: ['reportId', 'reviewId', 'customerId', 'reason', 'status', 'createdAt'],
