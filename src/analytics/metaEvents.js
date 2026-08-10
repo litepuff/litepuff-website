@@ -47,6 +47,10 @@ export function createMetaEventId(prefix = 'meta') {
   }
 }
 
+export function isMetaTrackingAttemptSuccessful(result) {
+  return result?.tracked === true;
+}
+
 export function normalizeMetaValue(value) {
   try {
     const normalized = Number(value);

@@ -45,6 +45,7 @@ import { whatsAppConfig } from './config/WhatsAppConfig.js';
 import { whatsAppHealthService } from './services/WhatsAppHealthService.js';
 import { startShippingRetryWorker } from './services/shippingService.js';
 import { startNotificationRetryWorker } from './services/NotificationService.js';
+import { startPurchaseRetryWorker } from './services/meta/PurchaseQueueService.js';
 import { adminSheetsService } from './services/AdminSheetsService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -158,6 +159,7 @@ export function startServer(port = env.port) {
     logger.info('startup.server.started-successfully', { port, environment: env.nodeEnv });
     startShippingRetryWorker();
     startNotificationRetryWorker();
+    startPurchaseRetryWorker();
     logger.info('startup.google-sheets.initializing');
     const credentialState = googleCredentialProvider.diagnostics();
     logger.info('google.credentials.loaded', { source: credentialState.credentialSource, configured: googleSheetsConfig.credentialsConfigured, clientEmail: credentialState.clientEmail, fingerprint: credentialState.credentialFingerprint });

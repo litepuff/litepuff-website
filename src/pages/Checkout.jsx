@@ -21,6 +21,8 @@ import { useToast } from "../context/ToastContext.jsx";
 import { useOrderPricing } from "../hooks/useOrderPricing.js";
 import { contentService } from "../services/contentService.js";
 import useMetaTracking from "../analytics/useMetaTracking.js";
+import { getMetaAttribution } from "../analytics/metaPixel.js";
+import { isMetaTrackingAttemptSuccessful } from "../analytics/metaEvents.js";
 
 const paymentMethods = [
   {
@@ -165,18 +167,6 @@ export default function Checkout() {
   const selectPaymentMethod = (method) => {
     setPaymentMethod(method);
     setServerPricing(null);
-    if (!paymentInfoTrackedRef.current) {
-      paymentInfoTrackedRef.current = true;
-      try {
-        trackAddPaymentInfo({
-          items: cartItems,
-          value: totals.grandTotal,
-          paymentMethod: method,
-        });
-      } catch {
-        // Analytics is optional and must never affect checkout.
-      }
-    }
     if (method === "cod") {
       setAppliedCoupon(null);
       setCoupon("");
@@ -223,6 +213,19 @@ export default function Checkout() {
       return;
     }
 
+    if (!paymentInfoTrackedRef.current) {
+      try {
+        const result = trackAddPaymentInfo({
+          items: cartItems,
+          value: totals.grandTotal,
+          paymentMethod,
+        });
+        if (isMetaTrackingAttemptSuccessful(result)) paymentInfoTrackedRef.current = true;
+      } catch {
+        // Analytics is optional and must never affect checkout.
+      }
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -234,6 +237,7 @@ export default function Checkout() {
           productId: item.id,
           quantity: item.quantity,
         })),
+        metaAttribution: getMetaAttribution(),
       };
       if (paymentMethod === "cod") {
         const result = await customerService.createCashOnDeliveryOrder(payload);
@@ -325,34 +329,29 @@ export default function Checkout() {
         checkout.open();
       });
       try {
-        const transactionId = String(
-          confirmedPayment?.transactionId ||
-          confirmedPayment?.paymentId ||
-          payment.paymentId ||
-          confirmed?.OrderID ||
-          confirmed?.id ||
-          '',
-        ).trim();
-        const purchaseStorageKey = transactionId
-          ? `litepuff:meta:purchase:${transactionId}`
+        const orderId = String(confirmed?.OrderID || confirmed?.id || '').trim();
+        const eventId = orderId ? `purchase-${orderId}` : '';
+        const purchaseStorageKey = eventId
+          ? `litepuff:meta:${eventId}`
           : '';
         const previouslyTracked = purchaseStorageKey
           ? localStorage.getItem(purchaseStorageKey) === '1'
           : purchaseTrackedRef.current;
 
         if (!previouslyTracked) {
-          purchaseTrackedRef.current = true;
-          if (purchaseStorageKey) localStorage.setItem(purchaseStorageKey, '1');
-          trackPurchase(
+          const result = trackPurchase(
             {
-              orderId: confirmed?.OrderID || confirmed?.id || transactionId,
-              transactionId,
+              orderId,
               items: cartItems,
               value: confirmedPayment?.amount || totals.grandTotal || cartTotal,
               currency: confirmedPayment?.currency || payment.currency || 'INR',
             },
-            transactionId ? `purchase-${transactionId}` : '',
+            eventId,
           );
+          if (isMetaTrackingAttemptSuccessful(result)) {
+            purchaseTrackedRef.current = true;
+            if (purchaseStorageKey) localStorage.setItem(purchaseStorageKey, '1');
+          }
         }
       } catch {
         // Analytics is optional and must never affect order completion.

@@ -30,8 +30,8 @@ import {
   preferredShippingProvider,
 } from "../services/shippingService.js";
 import { logger } from "../utils/logger.js";
-import { metaConversionService } from "../services/meta/MetaConversionService.js";
-import { env } from "../config/env.js";
+import { safelyQueuePurchase } from "../services/meta/PurchaseQueueService.js";
+import { isValidCapturedPayment } from "../services/meta/PurchasePolicy.js";
 
 export const createPaymentValidators = [
   body("address").isObject(),
@@ -59,6 +59,12 @@ const remarks = (value) => {
   }
 };
 const encodeRemarks = (value) => JSON.stringify(value).slice(0, 20_000);
+const requestMetaAttribution = (request) => ({
+  fbp: String(request.body?.metaAttribution?.fbp || '').trim(),
+  fbc: String(request.body?.metaAttribution?.fbc || '').trim(),
+  clientIp: String(request.get('x-forwarded-for') || '').split(',')[0].trim() || request.ip || '',
+  clientUserAgent: request.get('user-agent') || '',
+});
 
 const scheduleBackgroundTask = (taskName, task, context = {}) => {
   setImmediate(() => {
@@ -124,48 +130,6 @@ const schedulePostPaymentTasks = ({
   scheduleBackgroundTask(
     "notification.payment-success",
     () => notifyPaymentSuccess(order, payment, context),
-    context,
-  );
-  const transactionId =
-    payment.TransactionReference ||
-    payment.RazorpayPaymentID ||
-    payment.PaymentID;
-  scheduleBackgroundTask(
-    "meta.capi.purchase",
-    async () => {
-      const customer = (await getRows("CUSTOMERS"))
-        .find((row) => row.CustomerID === order.CustomerID);
-      const nameParts = String(snapshot.address.fullName || '').trim().split(/\s+/);
-      const firstName = customer?.FirstName || nameParts.shift() || '';
-      const lastName = customer?.LastName || nameParts.join(' ');
-      return metaConversionService.purchase({
-        eventId: `purchase-${transactionId}`,
-        eventSourceUrl: `${env.clientUrl}/order-success/${order.OrderID}`,
-        userData: {
-          externalId: order.CustomerID,
-          email: customer?.Email,
-          phone: snapshot.address.phone || customer?.Phone,
-          firstName,
-          lastName,
-          city: snapshot.address.city,
-          state: snapshot.address.state,
-          country: snapshot.address.country,
-          zip: snapshot.address.pincode,
-        },
-        customData: {
-          order_id: order.OrderID,
-          currency: payment.Currency || snapshot.currency || 'INR',
-          value: Number(payment.Amount || order.GrandTotal || snapshot.grandTotal),
-          content_type: 'product',
-          content_ids: snapshot.items.map((item) => item.productId),
-          contents: snapshot.items.map((item) => ({
-            id: item.productId,
-            quantity: Number(item.quantity || 1),
-            item_price: Number(item.price || 0),
-          })),
-        },
-      }, context);
-    },
     context,
   );
 };
@@ -243,12 +207,14 @@ async function finalizePayment({
         "ORDERS",
         (row) => row.OrderID === payment.OrderID,
       );
+      await safelyQueuePurchase(
+        order.OrderID,
+        remarks(payment.Remarks).metaAttribution || {},
+        { correlationId, orderId: order.OrderID, paymentId: payment.PaymentID },
+      );
       return { order, payment, replay: true };
     }
-    if (
-      payment.RazorpayOrderID !== razorpayOrderId ||
-      snapshot.razorpayOrderId !== razorpayOrderId
-    ) {
+    if (payment.RazorpayOrderID !== razorpayOrderId || snapshot.razorpayOrderId !== razorpayOrderId) {
       const error = new Error("Payment order mismatch.");
       error.status = 409;
       throw error;
@@ -264,13 +230,7 @@ async function finalizePayment({
       error.status = 409;
       throw error;
     }
-    if (
-      gatewayPayment.order_id !== payment.RazorpayOrderID ||
-      Number(gatewayPayment.amount) !==
-        Math.round(Number(payment.Amount) * 100) ||
-      gatewayPayment.currency !== payment.Currency ||
-      !["captured", "authorized"].includes(gatewayPayment.status)
-    ) {
+    if (!isValidCapturedPayment({ payment, snapshot, gatewayPayment })) {
       const error = new Error(
         "Gateway payment details could not be validated.",
       );
@@ -300,6 +260,11 @@ async function finalizePayment({
       snapshot,
       correlationId,
     });
+    await safelyQueuePurchase(
+      order.OrderID,
+      remarks(saved.Remarks).metaAttribution || {},
+      { correlationId, orderId: order.OrderID, paymentId: saved.PaymentID },
+    );
     return { order, payment: saved, replay: false };
   });
 }
@@ -340,6 +305,7 @@ async function createPaymentOrderUnlocked(request, response) {
       checkoutToken,
       checkoutExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
       pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod },
+      metaAttribution: requestMetaAttribution(request),
       message: "Payment checkout created.",
     }),
   });
@@ -386,7 +352,7 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
     PaidAt: "",
     TransactionReference: paymentId,
     Gateway: "Cash on Delivery",
-    Remarks: encodeRemarks({ pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, shippingIncluded: snapshot.shippingIncluded, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod }, message: "Creating Cash on Delivery order." }),
+    Remarks: encodeRemarks({ pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, shippingIncluded: snapshot.shippingIncluded, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod }, metaAttribution: requestMetaAttribution(request), message: "Creating Cash on Delivery order." }),
   });
   const payment = await findRow(
     "PAYMENTS",

@@ -137,6 +137,10 @@ export default function useMetaTracking() {
             item_price: normalizeMetaValue(item.price),
           })),
           currency: order.currency || META_CURRENCY,
+          num_items: items.reduce(
+            (total, item) => total + Math.max(1, Number(item.quantity) || 1),
+            0,
+          ),
           value: normalizeMetaValue(
             order.value ?? order.amount ?? order.grandTotal,
           ),

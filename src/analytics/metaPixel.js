@@ -78,6 +78,15 @@ function cookieValue(name) {
   }
 }
 
+export function getMetaAttribution() {
+  try {
+    if (typeof document === 'undefined') return {};
+    return compactMetaParams({ fbp: cookieValue('_fbp'), fbc: cookieValue('_fbc') });
+  } catch {
+    return {};
+  }
+}
+
 async function forwardMetaConversion(eventName, params, eventId, matching = {}) {
   try {
     if (!META_CAPI_EVENTS.has(eventName) || !eventId || typeof window === 'undefined') return;

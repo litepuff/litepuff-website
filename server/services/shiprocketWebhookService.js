@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { getRows, updateRow, appendRow } from './googleSheets.js';
 import { logger } from '../utils/logger.js';
 import { notificationService } from './NotificationService.js';
+import { safelyQueuePurchase } from './meta/PurchaseQueueService.js';
 
 const STATUS_MAP = new Map([
   ['shipment created', { shipment: 'Shipment Created', order: 'Confirmed' }],
@@ -31,6 +32,9 @@ const ORDER_RANK = new Map([
 ]);
 
 const clean = (value) => String(value || '').trim();
+const parseRemarks = (value) => {
+  try { return JSON.parse(value || '{}'); } catch { return {}; }
+};
 const normalizedStatus = (value) => clean(value).toLowerCase().replaceAll('_', ' ').replace(/\s+/g, ' ');
 const eventHash = (value) => crypto.createHash('sha256').update(value).digest('hex').slice(0, 24);
 const safeTimestamp = (value) => {
@@ -63,10 +67,11 @@ function nextOrderStatus(current, proposed) {
 }
 
 export class ShiprocketWebhookService {
-  constructor({ sheets = { getRows, updateRow, appendRow }, log = logger, notifier = null } = {}) {
+  constructor({ sheets = { getRows, updateRow, appendRow }, log = logger, notifier = null, queuePurchase = safelyQueuePurchase } = {}) {
     this.sheets = sheets;
     this.log = log;
     this.notifier = notifier;
+    this.queuePurchase = queuePurchase;
   }
 
   async process(payload, context = {}) {
@@ -150,6 +155,16 @@ export class ShiprocketWebhookService {
       UpdatedAt: event.timestamp,
       EstimatedDeliveryDate: order.EstimatedDelivery,
     });
+    if (
+      !stale &&
+      order.OrderStatus !== 'Delivered' &&
+      updatedOrder.OrderStatus === 'Delivered' &&
+      updatedOrder.PaymentMethod === 'Cash on Delivery'
+    ) {
+      const payment = (await this.sheets.getRows('PAYMENTS')).find((row) => row.OrderID === updatedOrder.OrderID);
+      const attribution = parseRemarks(payment?.Remarks).metaAttribution || {};
+      await this.queuePurchase(updatedOrder.OrderID, attribution, context);
+    }
     if (!stale && event.status.order) {
       this.notifier?.orderStatus(updatedOrder, updatedOrder.OrderStatus).catch((error) =>
         this.log.warn('shipping.webhook.notification_failed', { ...context, orderId: order.OrderID, code: error.code || 'NOTIFICATION_FAILED' })
