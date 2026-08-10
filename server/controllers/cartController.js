@@ -15,6 +15,8 @@ function publicCartItem(row, product) {
     updatedAt: row.UpdatedAt,
     product: product ? {
       id: product.ProductID,
+      productId: product.ProductID,
+      metaCatalogId: String(product.MetaCatalogID || '').trim(),
       name: product.Name,
       slug: product.Slug,
       price: pricing.sellingPrice,

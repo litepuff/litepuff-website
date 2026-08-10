@@ -83,6 +83,7 @@ export async function decorateOrder(row) {
       .map((item) => ({
         id: item.OrderItemID,
         productId: item.ProductID,
+        metaCatalogId: String(item.MetaCatalogID || '').trim(),
         productName: item.ProductName,
         price: Number(item.Price || 0),
         quantity: Number(item.Quantity || 0),

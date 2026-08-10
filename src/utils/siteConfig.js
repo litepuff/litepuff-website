@@ -22,6 +22,7 @@
 export const fallbackProducts = [
   {
     id: 'peri-peri-makhana',
+    metaCatalogId: 'ylq23re47d',
     name: 'Peri Peri Makhana',
     slug: 'peri-peri-makhana',
     price: 249,
@@ -39,6 +40,7 @@ export const fallbackProducts = [
   },
   {
     id: 'mint-pudina-makhana',
+    metaCatalogId: 'jsvvhrmhkv',
     name: 'Mint Pudina Makhana',
     slug: 'mint-pudina-makhana',
     price: 249,
@@ -56,6 +58,7 @@ export const fallbackProducts = [
   },
   {
     id: 'cheese-makhana',
+    metaCatalogId: '50ta2tmgg3',
     name: 'Cheese Makhana',
     slug: 'cheese-makhana',
     price: 249,
@@ -73,6 +76,7 @@ export const fallbackProducts = [
   },
   {
     id: 'cream-onion-makhana',
+    metaCatalogId: 'aj2tqtd7gb',
     name: 'Cream & Onion Makhana',
     slug: 'cream-onion-makhana',
     price: 249,
@@ -90,6 +94,7 @@ export const fallbackProducts = [
   },
   {
     id: 'salt-pepper-makhana',
+    metaCatalogId: 'uti8mwrq0k',
     name: 'Salt & Pepper Makhana',
     slug: 'salt-pepper-makhana',
     price: 249,

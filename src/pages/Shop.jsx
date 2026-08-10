@@ -28,6 +28,7 @@ import { useProducts } from "../hooks/useProducts.js";
 export const shopProducts = [
   {
     id: "peri-peri-makhana",
+    metaCatalogId: "ylq23re47d",
     slug: "peri-peri-makhana",
     name: "Peri Peri Makhana",
     tagline: "Smoky heat. Seriously crisp.",
@@ -48,6 +49,7 @@ export const shopProducts = [
   },
   {
     id: "mint-pudina-makhana",
+    metaCatalogId: "jsvvhrmhkv",
     slug: "mint-pudina-makhana",
     name: "Mint Makhana",
     tagline: "Cool, bright and quietly addictive.",
@@ -75,6 +77,7 @@ export const shopProducts = [
   },
   {
     id: "cheese-makhana",
+    metaCatalogId: "50ta2tmgg3",
     slug: "cheese-makhana",
     name: "Cheese Makhana",
     tagline: "Rich flavour. Beautifully light.",
@@ -102,6 +105,7 @@ export const shopProducts = [
   },
   {
     id: "cream-onion-makhana",
+    metaCatalogId: "aj2tqtd7gb",
     slug: "cream-onion-makhana",
     name: "Cream & Onion Makhana",
     tagline: "Creamy, savoury and familiar.",
@@ -129,6 +133,7 @@ export const shopProducts = [
   },
   {
     id: "salt-pepper-makhana",
+    metaCatalogId: "uti8mwrq0k",
     slug: "salt-pepper-makhana",
     name: "Salt & Pepper Makhana",
     tagline: "Simple seasoning. Remarkable crunch.",

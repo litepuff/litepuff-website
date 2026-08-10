@@ -14,7 +14,7 @@ export const SHEET_NAMES = Object.freeze({
 
 export const SHEET_SCHEMAS = Object.freeze({
   CUSTOMERS: ['CustomerID', 'FirstName', 'LastName', 'Email', 'Phone', 'Provider', 'GoogleID', 'ProfileImage', 'PasswordHash', 'CreatedAt', 'LastLogin', 'Status', 'Role', 'EmailVerified', 'PhoneVerified', 'MarketingConsent', 'UpdatedAt', 'DeletedAt', 'DeletedReason', 'VerificationDate', 'VerificationMethod', 'VerificationSource', 'LockedUntil', 'LockReason', 'BannedAt'],
-  PRODUCTS: ['ProductID', 'Name', 'Slug', 'Category', 'Flavor', 'ShortDescription', 'Description', 'Ingredients', 'NutritionPDF', 'Price', 'DiscountPrice', 'Weight', 'Stock', 'Featured', 'BestSeller', 'Status', 'PrimaryImage', 'CreatedAt', 'UpdatedAt'],
+  PRODUCTS: ['ProductID', 'Name', 'Slug', 'Category', 'Flavor', 'ShortDescription', 'Description', 'Ingredients', 'NutritionPDF', 'Price', 'DiscountPrice', 'Weight', 'Stock', 'Featured', 'BestSeller', 'Status', 'PrimaryImage', 'CreatedAt', 'UpdatedAt', 'MetaCatalogID'],
   PRODUCT_IMAGES: ['ImageID', 'ProductID', 'ImageURL', 'SortOrder'],
   CATEGORIES: ['CategoryID', 'Name', 'Slug', 'Status', 'SortOrder', 'CreatedAt', 'UpdatedAt'],
   INVENTORY: ['InventoryID', 'ProductID', 'Stock', 'Reserved', 'ReorderLevel', 'UpdatedAt'],
@@ -22,7 +22,7 @@ export const SHEET_SCHEMAS = Object.freeze({
   WISHLIST: ['WishlistID', 'CustomerID', 'ProductID', 'CreatedAt'],
   ADDRESSES: ['AddressID', 'CustomerID', 'FullName', 'Phone', 'AddressLine1', 'AddressLine2', 'Landmark', 'City', 'State', 'Pincode', 'Country', 'AddressType', 'IsDefault', 'CreatedAt'],
   ORDERS: ['OrderID', 'OrderNumber', 'CustomerID', 'AddressID', 'Subtotal', 'ProductDiscount', 'FirstOrderDiscount', 'CouponDiscount', 'Shipping', 'Discount', 'Tax', 'GrandTotal', 'CouponCode', 'PaymentMethod', 'PaymentStatus', 'OrderStatus', 'TrackingNumber', 'EstimatedDelivery', 'CreatedAt', 'UpdatedAt', 'ShippingProvider', 'ShipmentID', 'AWBNumber', 'CourierName', 'TrackingURL', 'ShippingStatus', 'PickupStatus', 'LabelURL', 'ManifestURL', 'ShippingCreatedAt', 'ShippingUpdatedAt'],
-  ORDER_ITEMS: ['OrderItemID', 'OrderID', 'ProductID', 'ProductName', 'Price', 'Quantity', 'Total'],
+  ORDER_ITEMS: ['OrderItemID', 'OrderID', 'ProductID', 'ProductName', 'Price', 'Quantity', 'Total', 'MetaCatalogID'],
   PAYMENTS: ['PaymentID', 'OrderID', 'CustomerID', 'RazorpayOrderID', 'RazorpayPaymentID', 'RazorpaySignature', 'PaymentMethod', 'Amount', 'Currency', 'Status', 'PaidAt', 'TransactionReference', 'Gateway', 'Remarks'],
   ORDER_TRACKING: ['TrackingID', 'OrderID', 'CurrentStatus', 'UpdatedBy', 'Remarks', 'UpdatedAt', 'EstimatedDeliveryDate'],
   COUPONS: ['CouponID', 'Code', 'Type', 'Value', 'MinOrder', 'MaxDiscount', 'Expiry', 'UsageLimit', 'UsedCount', 'Status'],

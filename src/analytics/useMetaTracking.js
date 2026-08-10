@@ -9,6 +9,7 @@ import {
   normalizeMetaValue,
 } from './metaEvents.js';
 import { trackMetaEvent } from './metaPixel.js';
+import { getMetaCatalogId, getMetaCatalogIds, getMetaContents } from './metaCatalog.js';
 import { useCustomerAuth } from '../context/CustomerAuthContext.jsx';
 
 function safeTrack(eventName, params, eventId, matching = {}) {
@@ -38,7 +39,7 @@ export default function useMetaTracking() {
       return safeTrack(
         META_EVENTS.VIEW_CONTENT,
         {
-          content_ids: normalizeMetaContentIds(product.id ?? product.productId),
+          content_ids: normalizeMetaContentIds(getMetaCatalogId(product)),
           content_name: product.name ?? product.productName,
           content_category: product.category,
           content_type: META_CONTENT_TYPE,
@@ -61,15 +62,11 @@ export default function useMetaTracking() {
       return safeTrack(
         META_EVENTS.ADD_TO_CART,
         {
-          content_ids: normalizeMetaContentIds(product.id ?? product.productId),
+          content_ids: normalizeMetaContentIds(getMetaCatalogId(product)),
           content_name: product.name ?? product.productName,
           content_category: product.category,
           content_type: META_CONTENT_TYPE,
-          contents: [{
-            id: String(product.id ?? product.productId ?? ''),
-            quantity: normalizedQuantity,
-            item_price: unitValue,
-          }],
+          contents: getMetaContents([{ ...product, quantity: normalizedQuantity, price: unitValue }]),
           currency: product.currency || META_CURRENCY,
           value: unitValue === undefined
             ? undefined
@@ -91,14 +88,10 @@ export default function useMetaTracking() {
         META_EVENTS.INITIATE_CHECKOUT,
         {
           content_ids: normalizeMetaContentIds(
-            items.map((item) => item.id ?? item.productId),
+            getMetaCatalogIds(items),
           ),
           content_type: META_CONTENT_TYPE,
-          contents: items.map((item) => ({
-            id: String(item.id ?? item.productId ?? ''),
-            quantity: Math.max(1, Number(item.quantity) || 1),
-            item_price: normalizeMetaValue(item.price),
-          })),
+          contents: getMetaContents(items),
           currency: checkout.currency || META_CURRENCY,
           num_items: items.reduce(
             (total, item) => total + Math.max(1, Number(item.quantity) || 1),
@@ -123,19 +116,22 @@ export default function useMetaTracking() {
         {
           order_id: order.orderId ?? order.transactionId,
           content_ids: normalizeMetaContentIds(
-            items.map((item) => item.id ?? item.productId),
+            getMetaCatalogIds(items),
           ),
           content_name: items
             .map((item) => String(item.name ?? item.productName ?? '').trim())
             .filter(Boolean)
             .join(', '),
           content_type: META_CONTENT_TYPE,
-          contents: items.map((item) => ({
-            id: String(item.id ?? item.productId ?? ''),
-            name: String(item.name ?? item.productName ?? ''),
-            quantity: Math.max(1, Number(item.quantity) || 1),
-            item_price: normalizeMetaValue(item.price),
-          })),
+          contents: items.flatMap((item) => {
+            const id = getMetaCatalogId(item);
+            return id ? [{
+              id,
+              name: String(item.name ?? item.productName ?? ''),
+              quantity: Math.max(1, Number(item.quantity) || 1),
+              item_price: normalizeMetaValue(item.price),
+            }] : [];
+          }),
           currency: order.currency || META_CURRENCY,
           num_items: items.reduce(
             (total, item) => total + Math.max(1, Number(item.quantity) || 1),
@@ -189,15 +185,11 @@ export default function useMetaTracking() {
       return safeTrack(
         META_EVENTS.REMOVE_FROM_CART,
         {
-          content_ids: normalizeMetaContentIds(product.id ?? product.productId),
+          content_ids: normalizeMetaContentIds(getMetaCatalogId(product)),
           content_name: product.name ?? product.productName,
           content_category: product.category,
           content_type: META_CONTENT_TYPE,
-          contents: [{
-            id: String(product.id ?? product.productId ?? ''),
-            quantity: normalizedQuantity,
-            item_price: unitValue,
-          }],
+          contents: getMetaContents([{ ...product, quantity: normalizedQuantity, price: unitValue }]),
           currency: product.currency || META_CURRENCY,
           value: unitValue === undefined
             ? undefined
@@ -217,7 +209,7 @@ export default function useMetaTracking() {
         {
           content_ids: normalizeMetaContentIds(
             (Array.isArray(payment.items) ? payment.items : [])
-              .map((item) => item.id ?? item.productId),
+              .map(getMetaCatalogId),
           ),
           content_type: META_CONTENT_TYPE,
           currency: payment.currency || META_CURRENCY,
@@ -236,7 +228,7 @@ export default function useMetaTracking() {
       return safeTrack(
         META_EVENTS.ADD_TO_WISHLIST,
         {
-          content_ids: normalizeMetaContentIds(product.id ?? product.productId),
+          content_ids: normalizeMetaContentIds(getMetaCatalogId(product)),
           content_name: product.name ?? product.productName,
           content_category: product.category,
           content_type: META_CONTENT_TYPE,

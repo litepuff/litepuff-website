@@ -81,6 +81,7 @@ async function pricedCart(customerId, requestedItems = []) {
     const { mrp: originalPrice, sellingPrice: price } = productPricing();
     return {
       productId: product.ProductID,
+      metaCatalogId: String(product.MetaCatalogID || '').trim(),
       productName: product.Name,
       price,
       originalPrice,
@@ -305,6 +306,7 @@ async function materializeOrderUnlocked({
       OrderItemID: orderItemId,
       OrderID: orderId,
       ProductID: item.productId,
+      MetaCatalogID: item.metaCatalogId,
       ProductName: item.productName,
       Price: item.price,
       Quantity: item.quantity,

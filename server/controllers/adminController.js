@@ -88,6 +88,7 @@ const productDto = (row) => {
   return ({
   id: row.ProductID,
   productId: row.ProductID,
+  metaCatalogId: text(row.MetaCatalogID),
   name: row.Name,
   slug: row.Slug,
   category: row.Category,
@@ -420,6 +421,7 @@ export async function createAdminProduct(request, response) {
   const pricing = productPricing();
   const row = {
     ProductID: createId("product"),
+    MetaCatalogID: text(request.body.metaCatalogId),
     Name: request.body.name,
     Slug: request.body.slug || slugify(request.body.name || ""),
     Category: request.body.category || "Makhana",
@@ -463,11 +465,14 @@ export async function updateAdminProduct(request, response) {
     stock: "Stock",
     status: "Status",
     primaryImage: "PrimaryImage",
+    metaCatalogId: "MetaCatalogID",
   };
   Object.entries(fields).forEach(([input, column]) => {
     if (request.body[input] !== undefined)
       row[column] =
-        input === "ingredients" && Array.isArray(request.body[input])
+        input === "metaCatalogId"
+          ? text(request.body[input])
+          : input === "ingredients" && Array.isArray(request.body[input])
           ? request.body[input].join(", ")
           : request.body[input];
   });
@@ -498,6 +503,7 @@ export async function duplicateAdminProduct(request, response) {
     ...source,
     _row: undefined,
     ProductID: createId("product"),
+    MetaCatalogID: "",
     Name: `${source.Name} Copy`,
     Slug: `${source.Slug || slugify(source.Name)}-copy-${Date.now().toString().slice(-4)}`,
     CreatedAt: stamped,

@@ -87,7 +87,7 @@ export class PurchaseQueueService {
         eventSourceUrl: `${this.clientUrl}/order-success/${records.order.OrderID}`,
         value: Number(records.order.GrandTotal || records.payment.Amount || 0),
         currency: 'INR',
-        contentIds: records.items.map((item) => item.ProductID),
+        contentIds: records.items.map((item) => clean(item.MetaCatalogID)).filter(Boolean),
         contentName: records.items.map((item) => clean(item.ProductName)).filter(Boolean).join(', '),
         numItems,
         attribution: {
@@ -97,6 +97,13 @@ export class PurchaseQueueService {
           clientUserAgent: clean(attribution.clientUserAgent),
         },
       };
+      if (metadata.contentIds.length !== records.items.length) {
+        this.log.warn('meta.purchase.catalog_id_missing', {
+          ...requestContext,
+          orderId,
+          missingCount: records.items.length - metadata.contentIds.length,
+        });
+      }
       const job = {
         NotificationID: jobId(orderId),
         CustomerID: records.order.CustomerID,
@@ -133,8 +140,8 @@ export class PurchaseQueueService {
         return { sent: true, replay: true, eventId: purchaseEventId(orderId) };
       }
       const metadata = parseJson(records.job.Metadata);
-      const contents = records.items.map((item) => ({
-        id: item.ProductID,
+      const contents = records.items.filter((item) => clean(item.MetaCatalogID)).map((item) => ({
+        id: clean(item.MetaCatalogID),
         quantity: Math.max(1, Number(item.Quantity || 1)),
         item_price: Number(item.Price || 0),
       }));
@@ -161,7 +168,7 @@ export class PurchaseQueueService {
           },
           customData: {
             order_id: records.order.OrderID,
-            content_ids: metadata.contentIds || records.items.map((item) => item.ProductID),
+            content_ids: contents.map((item) => item.id),
             content_type: 'product',
             contents,
             content_name: metadata.contentName,

@@ -35,8 +35,8 @@ class MemorySheets {
 const onlineSeed = () => ({
   ORDERS: [{ _row: 2, OrderID: 'order-1', CustomerID: 'customer-1', AddressID: 'address-1', PaymentMethod: 'upi', PaymentStatus: 'Paid', OrderStatus: 'Confirmed', GrandTotal: 499 }],
   ORDER_ITEMS: [
-    { _row: 2, OrderID: 'order-1', ProductID: 'sku-1', ProductName: 'Mint Makhana', Price: 199, Quantity: 2 },
-    { _row: 3, OrderID: 'order-1', ProductID: 'sku-2', ProductName: 'Cheese Makhana', Price: 101, Quantity: 1 },
+    { _row: 2, OrderID: 'order-1', ProductID: 'mint-pudina-makhana', MetaCatalogID: 'jsvvhrmhkv', ProductName: 'Mint Makhana', Price: 199, Quantity: 2 },
+    { _row: 3, OrderID: 'order-1', ProductID: 'cheese-makhana', MetaCatalogID: '50ta2tmgg3', ProductName: 'Cheese Makhana', Price: 101, Quantity: 1 },
   ],
   PAYMENTS: [{ _row: 2, PaymentID: 'payment-1', OrderID: 'order-1', CustomerID: 'customer-1', Status: 'Paid', Amount: 499, Currency: 'INR', Remarks: '{}' }],
   CUSTOMERS: [{ _row: 2, CustomerID: 'customer-1', Email: 'customer@example.com', Phone: '9876543210', FirstName: 'Lite', LastName: 'Puff' }],
@@ -98,7 +98,8 @@ test('online Purchase is durable, has complete parameters and a stable event ID'
   assert.equal(result.sent, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].eventId, 'purchase-order-1');
-  assert.deepEqual(calls[0].customData.content_ids, ['sku-1', 'sku-2']);
+  assert.deepEqual(calls[0].customData.content_ids, ['jsvvhrmhkv', '50ta2tmgg3']);
+  assert.deepEqual(calls[0].customData.contents.map((item) => item.id), ['jsvvhrmhkv', '50ta2tmgg3']);
   assert.equal(calls[0].customData.content_type, 'product');
   assert.equal(calls[0].customData.content_name, 'Mint Makhana, Cheese Makhana');
   assert.equal(calls[0].customData.num_items, 3);
@@ -141,6 +142,22 @@ test('missing Meta credentials do not throw and leave Purchase retryable', async
   const result = await service.enqueueAndDeliver('order-1');
   assert.equal(result.sent, false);
   assert.equal(sheets.data.NOTIFICATIONS[0].Status, 'retry_pending');
+});
+
+test('historical order items without MetaCatalogID never fall back to ProductID', async () => {
+  const seed = onlineSeed();
+  seed.ORDER_ITEMS = seed.ORDER_ITEMS.map(({ MetaCatalogID, ...item }) => item);
+  const sheets = new MemorySheets(seed);
+  const calls = [];
+  const service = new PurchaseQueueService({
+    sheets,
+    meta: { purchase: async (event) => { calls.push(event); return { sent: true }; } },
+    log: silent,
+  });
+  await service.enqueueAndDeliver('order-1');
+  assert.deepEqual(calls[0].customData.content_ids, []);
+  assert.deepEqual(calls[0].customData.contents, []);
+  assert.equal(sheets.data.ORDER_ITEMS[0].ProductID, 'mint-pudina-makhana');
 });
 
 test('authenticated non-stale Shiprocket Delivered transition queues one COD Purchase', async () => {

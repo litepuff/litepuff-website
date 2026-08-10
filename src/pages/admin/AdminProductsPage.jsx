@@ -5,7 +5,7 @@ import { adminService } from '../../services/adminService';
 import { formatMoney } from '../../utils/formatMoney';
 import { useToast } from '../../context/ToastContext.jsx';
 
-const emptyProduct = { name: '', category: 'Makhana', flavor: '', price: '', discountPrice: '', stock: 0, status: 'active', featured: false, bestSeller: false, primaryImage: '', nutritionPDF: '', shortDescription: '' };
+const emptyProduct = { name: '', metaCatalogId: '', category: 'Makhana', flavor: '', price: '', discountPrice: '', stock: 0, status: 'active', featured: false, bestSeller: false, primaryImage: '', nutritionPDF: '', shortDescription: '' };
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -44,6 +44,7 @@ export default function AdminProductsPage() {
       <PageTitle eyebrow="Products" title="Product management" />
       <form onSubmit={save} className="grid gap-3 rounded-[24px] border border-brand-border bg-white p-5 shadow-sm md:grid-cols-3">
         <input required placeholder="Product name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="admin-input" />
+        <input placeholder="Meta Catalogue ID" value={form.metaCatalogId} onChange={(e) => setForm({ ...form, metaCatalogId: e.target.value })} onBlur={(e) => setForm({ ...form, metaCatalogId: e.target.value.trim() })} className="admin-input" />
         <input placeholder="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="admin-input" />
         <input placeholder="Flavor" value={form.flavor} onChange={(e) => setForm({ ...form, flavor: e.target.value })} className="admin-input" />
         <input placeholder="Price" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="admin-input" />
@@ -66,6 +67,7 @@ export default function AdminProductsPage() {
         columns={[
           { key: 'name', label: 'Product' },
           { key: 'category', label: 'Category' },
+          { key: 'metaCatalogId', label: 'Meta Catalogue ID' },
           { key: 'price', label: 'Price', render: (row) => formatMoney(row.price) },
           { key: 'stock', label: 'Stock' },
           { key: 'status', label: 'Status', render: (row) => <AdminStatusBadge>{row.status}</AdminStatusBadge> }

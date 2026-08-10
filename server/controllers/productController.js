@@ -11,6 +11,7 @@ function publicProduct(row, images = []) {
   return {
     id: row.ProductID,
     productId: row.ProductID,
+    metaCatalogId: String(row.MetaCatalogID || '').trim(),
     name: row.Name,
     slug: row.Slug,
     category: row.Category,
