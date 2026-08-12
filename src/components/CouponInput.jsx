@@ -30,7 +30,7 @@ export default function CouponInput({ onApply }) {
   return (
     <form onSubmit={handleSubmit} className="rounded-[24px] border border-[#E7DFD2] bg-white p-4 shadow-[0_8px_24px_rgba(36,48,41,0.035)]">
       <div className="mb-3 flex items-center justify-between gap-3"><label htmlFor="cart-coupon" className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#6B726D]">Coupon code</label><span className="inline-flex items-center gap-1 rounded-full bg-[#F8F1DF] px-2.5 py-1 text-[10px] font-bold text-[#8B6828]"><FiTag aria-hidden="true" /> Online offer</span></div>
-      <button type="button" onClick={() => { setCode('LITEPUFF20'); setStatus('idle'); }} className="mb-3 flex w-full items-center justify-between rounded-2xl border border-dashed border-[#CDBD9A] bg-[#FCF8EE] px-4 py-3 text-left"><span><strong className="block text-sm text-[#243029]">LITEPUFF20</strong><span className="text-xs text-[#6B726D]">20% off online payments</span></span><span className="text-xs font-bold text-[#1E4D3A]">Use code</span></button>
+      <p className="mb-3 text-xs leading-5 text-[#6B726D]">Enter an active LitePuff coupon. Eligibility and savings are verified securely.</p>
       <div className="flex gap-2">
         <input
           id="cart-coupon"

@@ -4,6 +4,7 @@ import AdminStatusBadge from '../../components/admin/AdminStatusBadge.jsx';
 import { adminService } from '../../services/adminService';
 import { formatMoney } from '../../utils/formatMoney';
 import { useToast } from '../../context/ToastContext.jsx';
+import { DEFAULT_OFFER_CONFIG } from '../../../shared/offerConfig.js';
 
 const emptyProduct = { name: '', metaCatalogId: '', category: 'Makhana', flavor: '', price: '', discountPrice: '', stock: 0, status: 'active', featured: false, bestSeller: false, primaryImage: '', nutritionPDF: '', shortDescription: '' };
 
@@ -12,6 +13,7 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState(emptyProduct);
   const [editingId, setEditingId] = useState('');
   const [loading, setLoading] = useState(true);
+  const [offers, setOffers] = useState(DEFAULT_OFFER_CONFIG);
   const { confirmAction, showToast } = useToast();
 
   async function load(search = '') {
@@ -21,7 +23,14 @@ export default function AdminProductsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); adminService.offers().then((data) => setOffers(data.offers || DEFAULT_OFFER_CONFIG)); }, []);
+
+  async function saveOffers(event) {
+    event.preventDefault();
+    const data = await adminService.updateOffers(offers);
+    setOffers(data.offers);
+    showToast('Offer configuration updated.');
+  }
 
   async function save(event) {
     event.preventDefault();
@@ -42,6 +51,12 @@ export default function AdminProductsPage() {
   return (
     <section className="grid gap-6">
       <PageTitle eyebrow="Products" title="Product management" />
+      <form onSubmit={saveOffers} className="grid gap-3 rounded-[24px] border border-brand-border bg-white p-5 shadow-sm md:grid-cols-3">
+        <h2 className="font-display text-2xl font-bold md:col-span-3">Store offers</h2>
+        <label className="text-sm font-bold">Single product discount %<input type="number" min="0" max="100" value={offers.singleDiscountPercent} onChange={(e) => setOffers({ ...offers, singleDiscountPercent: Number(e.target.value) })} className="admin-input mt-2 w-full" /></label>
+        {[['combo2', '2-product combo'], ['combo3', '3-product combo']].map(([key, label]) => <fieldset key={key} className="grid gap-2 rounded-2xl border border-brand-border p-4"><legend className="px-2 font-bold">{label}</legend><label className="text-sm">Price<input type="number" min="1" value={offers[key].price} onChange={(e) => setOffers({ ...offers, [key]: { ...offers[key], price: Number(e.target.value) } })} className="admin-input mt-1 w-full" /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={offers[key].enabled} onChange={(e) => setOffers({ ...offers, [key]: { ...offers[key], enabled: e.target.checked } })} /> Enabled</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={offers[key].freeDelivery} onChange={(e) => setOffers({ ...offers, [key]: { ...offers[key], freeDelivery: e.target.checked } })} /> Free delivery</label></fieldset>)}
+        <button className="rounded-2xl bg-brand-primary px-5 py-3 text-sm font-black text-white">Save Offers</button>
+      </form>
       <form onSubmit={save} className="grid gap-3 rounded-[24px] border border-brand-border bg-white p-5 shadow-sm md:grid-cols-3">
         <input required placeholder="Product name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="admin-input" />
         <input placeholder="Meta Catalogue ID" value={form.metaCatalogId} onChange={(e) => setForm({ ...form, metaCatalogId: e.target.value })} onBlur={(e) => setForm({ ...form, metaCatalogId: e.target.value.trim() })} className="admin-input" />

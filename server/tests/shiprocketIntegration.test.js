@@ -262,14 +262,14 @@ test('pending shipment recovery is paid-order-only, idempotent and reports recon
     ORDERS: [
       { OrderID: 'order-1', OrderNumber: 'LP-1', AddressID: 'address-1', PaymentStatus: 'Paid', OrderStatus: 'Confirmed' },
       { OrderID: 'order-2', OrderNumber: 'LP-2', AddressID: 'address-2', PaymentStatus: 'Paid', OrderStatus: 'Confirmed' },
-      { OrderID: 'order-3', OrderNumber: 'LP-3', AddressID: 'address-3', PaymentStatus: 'Pending', OrderStatus: 'Confirmed' },
+      { OrderID: 'order-3', OrderNumber: 'LP-3', AddressID: 'address-3', PaymentMethod: 'Cash on Delivery', PaymentStatus: 'Pending', OrderStatus: 'Confirmed' },
       { OrderID: 'order-4', OrderNumber: 'LP-4', AddressID: 'address-4', PaymentStatus: 'Paid', OrderStatus: 'Cancelled' },
       { OrderID: 'order-5', OrderNumber: 'LP-5', AddressID: 'address-5', PaymentStatus: 'Paid', OrderStatus: 'Confirmed' },
     ],
     PAYMENTS: [
       { OrderID: 'order-1', Status: 'Paid' },
       { OrderID: 'order-2', Status: 'Paid' },
-      { OrderID: 'order-3', Status: 'Pending' },
+      { OrderID: 'order-3', PaymentMethod: 'Cash on Delivery', Status: 'Pending' },
       { OrderID: 'order-4', Status: 'Paid' },
       { OrderID: 'order-5', Status: 'Paid' },
     ],
@@ -322,11 +322,11 @@ test('pending shipment recovery is paid-order-only, idempotent and reports recon
     }
   );
 
-  assert.deepEqual(createCalls.map((call) => call.orderId), ['order-1', 'order-2']);
+  assert.deepEqual(createCalls.map((call) => call.orderId), ['order-1', 'order-2', 'order-3']);
   assert.ok(createCalls.every((call) => call.provider === 'shiprocket' && call.context.allowFallback === false));
-  assert.equal(report.counts.recovered, 1);
+  assert.equal(report.counts.recovered, 2);
   assert.equal(report.counts.duplicates, 1);
-  assert.equal(report.counts.skipped, 3);
+  assert.equal(report.counts.skipped, 2);
   assert.equal(report.counts.failed, 0);
 });
 

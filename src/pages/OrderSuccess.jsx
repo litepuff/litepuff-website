@@ -127,7 +127,7 @@ export default function OrderSuccess() {
                         className="flex justify-between gap-4 py-4 text-sm"
                       >
                         <span>
-                          {item.productName} × {item.quantity}
+                          {item.comboName ? `${item.comboName}: ` : ''}{item.productName} × {item.quantity}
                         </span>
                         <strong>{formatMoney(item.total)}</strong>
                       </div>

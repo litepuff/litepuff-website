@@ -123,7 +123,7 @@ export default function useMetaTracking() {
             .filter(Boolean)
             .join(', '),
           content_type: META_CONTENT_TYPE,
-          contents: items.flatMap((item) => {
+          contents: items.flatMap((item) => item.type === 'combo' ? item.items || [] : [item]).flatMap((item) => {
             const id = getMetaCatalogId(item);
             return id ? [{
               id,

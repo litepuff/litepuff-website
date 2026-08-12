@@ -7,6 +7,7 @@ import EmptyCart from '../components/cart/EmptyCart.jsx';
 import RecommendedProducts from '../components/cart/RecommendedProducts.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { useState } from 'react';
+import ComboUpgradePrompt from '../components/cart/ComboUpgradePrompt.jsx';
 
 export default function Cart() {
   const { cartItems, updateQuantity } = useCart();
@@ -31,6 +32,7 @@ export default function Cart() {
           {cartItems.length > 0 ? (
             <div className="mt-10 grid items-start gap-6 md:grid-cols-[minmax(0,65fr)_minmax(280px,35fr)] lg:grid-cols-[minmax(0,68fr)_minmax(320px,32fr)] lg:gap-8">
               <div className="space-y-5">
+                <ComboUpgradePrompt items={cartItems} />
                 <AnimatePresence initial={false}>
                   {cartItems.map((item) => <CartItem key={item.id} item={item} onUpdateQuantity={changeQuantity} onRemove={(id) => changeQuantity(id, 0)} />)}
                 </AnimatePresence>

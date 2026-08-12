@@ -278,12 +278,6 @@ export class ShiprocketProvider {
       let payload;
       try {
         payload = orderToShiprocket(order);
-        const diagnosticPayload = redactProviderPayload(payload);
-        logger.info('shiprocket.order.payload', {
-          orderId: order.OrderID,
-          orderNumber: order.OrderNumber,
-          payloadJson: JSON.stringify(diagnosticPayload)
-        });
         logger.info('shiprocket.order.payload.types', {
           orderId: order.OrderID,
           orderNumber: order.OrderNumber,
@@ -306,11 +300,6 @@ export class ShiprocketProvider {
           paymentMethod: payload.payment_method,
           subTotal: payload.sub_total,
           package: { length: payload.length, breadth: payload.breadth, height: payload.height, weight: payload.weight }
-        });
-        logger.info('shiprocket.final.payload', {
-          orderId: order.OrderID,
-          orderNumber: order.OrderNumber,
-          payloadJson: JSON.stringify(diagnosticPayload)
         });
         const created = await this.call('/orders/create/adhoc', { method: 'POST', body: JSON.stringify(payload) });
         logger.info('shiprocket.response', {
@@ -336,8 +325,7 @@ export class ShiprocketProvider {
             providerCode: error.providerCode,
             validationFields: error.validationFields,
             validationErrorsJson: JSON.stringify(error.validationErrors),
-            responseJson: JSON.stringify(error.providerBody),
-            payloadJson: JSON.stringify(redactProviderPayload(payload))
+            responseJson: JSON.stringify(redactProviderPayload(error.providerBody))
           });
         }
         remote = await this.findByExternalOrderId(order.OrderNumber).catch(() => null);
@@ -641,10 +629,11 @@ export async function recoverPendingShipments(options = {}, dependencies = {}) {
       const shipment = shipmentsByOrder.get(order.OrderID);
       const identity = { orderId: order.OrderID, orderNumber: order.OrderNumber };
       const paid = payment?.Status === 'Paid' || order.PaymentStatus === 'Paid';
+      const cashOnDelivery = String(payment?.PaymentMethod || order.PaymentMethod || '').trim().toLowerCase() === 'cash on delivery';
       const orderStatus = String(order.OrderStatus || '').trim().toLowerCase();
       const awb = shipment?.AWBNumber || shipment?.AWB || shipment?.TrackingNumber || '';
 
-      if (!paid) {
+      if (!paid && !cashOnDelivery) {
         report.skipped.push({ ...identity, reason: 'order_not_paid' });
         continue;
       }

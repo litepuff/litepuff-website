@@ -12,10 +12,11 @@ export default function CartSummary({ items = [], coupon = null }) {
     <h3 id="cart-summary-title" className="font-display text-[22px] font-semibold tracking-[-0.02em] text-[#243029]">Order Summary</h3>
     <div className="mt-2.5 space-y-1.5 text-xs leading-5">
       <SummaryRow label="MRP">{formatMoney(pricing.subtotal)}</SummaryRow>
+      {pricing.productDiscount > 0 && <SummaryRow label="Product Discount"><span className="font-semibold text-[#1F5E3B]">-{formatMoney(pricing.productDiscount)}</span></SummaryRow>}
       {pricing.couponDiscount > 0 && <SummaryRow label="Coupon Discount"><span className="font-semibold text-[#1F5E3B]">-{formatMoney(pricing.couponDiscount)}</span></SummaryRow>}
       <SummaryRow label="Shipping">{pricing.shipping ? formatMoney(pricing.shipping) : <span className="font-medium text-[#1E4D3A]">Free</span>}</SummaryRow>
       <SummaryRow label="Tax">Included</SummaryRow>
-      <SummaryRow label="Estimated delivery"><span className="inline-flex items-center gap-1.5"><FiTruck aria-hidden="true" />2–4 Days</span></SummaryRow>
+      <SummaryRow label="Estimated delivery"><span className="inline-flex items-center gap-1.5"><FiTruck aria-hidden="true" />1–2 Days</span></SummaryRow>
     </div>
     <div className="mt-2.5 border-t border-[#ECE7DD] pt-2.5 text-[15px]"><SummaryRow label="Grand Total" strong>{formatMoney(pricing.grandTotal)}</SummaryRow></div>
   </section>;

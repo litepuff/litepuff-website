@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FiLock } from 'react-icons/fi';
+import { FiArrowRight, FiLock } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import CartHeader from './CartHeader.jsx';
@@ -8,13 +8,15 @@ import CartItem from './CartItem.jsx';
 import CartSummary from './CartSummary.jsx';
 import CouponInput from './CouponInput.jsx';
 import EmptyCart from './EmptyCart.jsx';
-import FreeShippingBar from './FreeShippingBar.jsx';
-import OnlinePaymentOffer from './OnlinePaymentOffer.jsx';
+import ComboUpgradePrompt from './cart/ComboUpgradePrompt.jsx';
+import { useOrderPricing } from '../hooks/useOrderPricing.js';
+import { formatMoney } from '../utils/formatMoney.js';
 
 export default function CartDrawer({ isOpen, onClose, onCheckout, onApplyCoupon }) {
-  const { cartItems, cartTotal, cartCount, updateQuantity } = useCart();
+  const { cartItems, cartCount, updateQuantity } = useCart();
   const closeButtonRef = useRef(null);
   const [coupon, setCoupon] = useState(() => { try { return JSON.parse(localStorage.getItem('litepuffCoupon') || 'null'); } catch { return null; } });
+  const pricing = useOrderPricing(cartItems, { couponCode: coupon?.code, couponDiscount: coupon?.discount, paymentMethod: 'online' });
   const changeQuantity = (id, quantity) => { setCoupon(null); updateQuantity(id, quantity); };
 
   function applyCoupon(result) {
@@ -73,8 +75,8 @@ export default function CartDrawer({ isOpen, onClose, onCheckout, onApplyCoupon 
               <EmptyCart onClose={onClose} />
             ) : (
               <>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
-                  <div className="space-y-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
+                  <div className="space-y-3 pb-2">
                     <AnimatePresence initial={false}>
                       {cartItems.map((item) => (
                         <CartItem
@@ -85,31 +87,34 @@ export default function CartDrawer({ isOpen, onClose, onCheckout, onApplyCoupon 
                         />
                       ))}
                     </AnimatePresence>
-                    <OnlinePaymentOffer compact />
+                    <ComboUpgradePrompt items={cartItems} onAccept={onClose} />
                     <CouponInput onApply={applyCoupon} />
-                    <FreeShippingBar quantity={cartCount} />
+                    <CartSummary items={cartItems} coupon={coupon} />
                   </div>
                 </div>
 
-                <footer className="z-20 shrink-0 border-t border-[#ECE7DD] bg-white px-4 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(36,48,41,0.06)] sm:px-6">
+                <footer className="relative z-20 shrink-0 border-t border-[#E5DED2] bg-white px-4 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_30px_rgba(36,48,41,0.10)] sm:px-5">
                   <div className="space-y-2.5">
-                    <CartSummary items={cartItems} coupon={coupon} />
+                    <div className="flex items-end justify-between gap-4">
+                      <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#7A817C]">Grand Total</p><p className="mt-0.5 text-[10px] text-[#7A817C]">Tax included</p></div>
+                      <strong className="font-display text-[28px] font-semibold leading-none text-[#243029]">{formatMoney(pricing.grandTotal)}</strong>
+                    </div>
 
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid gap-2">
                       <motion.button
                         type="button"
                         onClick={onCheckout}
                         whileHover={{ scale: 1.01 }}
                         whileTap={{ scale: 0.99 }}
                         transition={{ duration: 0.2 }}
-                        className="flex h-11 w-full items-center justify-center rounded-xl bg-[#1F5E3B] px-3 text-xs font-bold text-white transition-colors hover:bg-[#2C614A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5E3B] focus-visible:ring-offset-2"
+                        className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1F5E3B] px-5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(31,94,59,.18)] transition-colors hover:bg-[#2C614A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5E3B] focus-visible:ring-offset-2"
                       >
-                        Proceed to Checkout
+                        Proceed to Checkout <FiArrowRight aria-hidden="true" />
                       </motion.button>
-                      <Link to="/products" onClick={onClose} className="flex h-11 w-full items-center justify-center rounded-xl border border-[#1F5E3B] px-3 text-xs font-bold text-[#1F5E3B] transition-colors hover:bg-[#FAF8F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5E3B] focus-visible:ring-offset-2">Continue Shopping</Link>
+                      <Link to="/products" onClick={onClose} className="flex h-8 w-full items-center justify-center text-xs font-semibold text-[#526159] transition-colors hover:text-[#1F5E3B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5E3B] focus-visible:ring-offset-2">Continue Shopping</Link>
                     </div>
 
-                    <div className="flex items-center justify-center gap-2 pt-1 text-xs text-[#7A817C]">
+                    <div className="flex items-center justify-center gap-2 border-t border-[#F0ECE5] pt-2 text-[10px] text-[#7A817C]">
                       <FiLock size={13} aria-hidden="true" />
                       <span>Secure checkout &middot; Protected payment</span>
                     </div>

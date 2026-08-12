@@ -64,6 +64,7 @@ export default function AdminOrdersPage() {
         onSearch={load}
         columns={[
           { key: "orderNumber", label: "Order" },
+          { key: "items", label: "Packing", render: (row) => <div className="min-w-[220px] text-xs">{row.items?.map((item) => <div key={item.OrderItemID || item.id}><strong>{item.comboName || item.ComboName || 'Single Product'}</strong>: {item.ProductName || item.productName} × {item.Quantity || item.quantity}</div>)}</div> },
           { key: "trackingNumber", label: "Tracking ID" },
           { key: "shippingProvider", label: "Shipping Provider" },
           { key: "awbNumber", label: "AWB Number" },

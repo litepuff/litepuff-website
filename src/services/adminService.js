@@ -9,6 +9,8 @@ export const adminService = {
   updateProfile: async (payload) => unwrap(await apiClient.put('/admin/profile', payload)),
   dashboard: async () => unwrap(await apiClient.get('/admin/dashboard')),
   products: async (params = {}) => unwrap(await apiClient.get('/admin/products', { params })),
+  offers: async () => unwrap(await apiClient.get('/admin/offers')),
+  updateOffers: async (payload) => unwrap(await apiClient.put('/admin/offers', payload)),
   createProduct: async (payload) => unwrap(await apiClient.post('/admin/products', payload)),
   updateProduct: async (id, payload) => unwrap(await apiClient.put(`/admin/products/${id}`, payload)),
   deleteProduct: async (id) => unwrap(await apiClient.delete(`/admin/products/${id}`)),

@@ -7,7 +7,6 @@ import {
   FiSearch,
   FiShoppingBag,
   FiStar,
-  FiTag,
   FiX,
 } from "react-icons/fi";
 import Seo from "../components/Seo.jsx";
@@ -24,6 +23,8 @@ import ragiChipsImage from "../assets/images/products/ragi-chips.png";
 import beetrootChipsImage from "../assets/images/products/beetroot.png";
 import oatsChipsImage from "../assets/images/products/oats-chips.png";
 import { useProducts } from "../hooks/useProducts.js";
+import BuildYourBox from "../components/storefront/BuildYourBox.jsx";
+import ProductPriceDisplay from "../components/ProductPriceDisplay.jsx";
 
 export const shopProducts = [
   {
@@ -35,7 +36,7 @@ export const shopProducts = [
     shortDescription:
       "Bold roasted makhana with tangy spice, smoky warmth and a clean crunch.",
     keywords: ["snack", "fox nuts", "lotus seeds", "spicy", "tangy", "roasted"],
-    price: 249,
+    price: 211.65,
     weight: "70g",
     rating: 4.9,
     reviewCount: 254,
@@ -63,7 +64,7 @@ export const shopProducts = [
       "minty",
       "roasted",
     ],
-    price: 249,
+    price: 211.65,
     weight: "70g",
     rating: 4.8,
     reviewCount: 218,
@@ -91,7 +92,7 @@ export const shopProducts = [
       "creamy",
       "roasted",
     ],
-    price: 249,
+    price: 211.65,
     weight: "70g",
     rating: 4.9,
     reviewCount: 286,
@@ -119,7 +120,7 @@ export const shopProducts = [
       "onion",
       "roasted",
     ],
-    price: 249,
+    price: 211.65,
     weight: "70g",
     rating: 4.8,
     reviewCount: 231,
@@ -147,7 +148,7 @@ export const shopProducts = [
       "classic",
       "roasted",
     ],
-    price: 249,
+    price: 211.65,
     weight: "70g",
     rating: 4.7,
     reviewCount: 196,
@@ -235,57 +236,12 @@ function ProductRating({ rating, reviewCount }) {
   );
 }
 
-function ProductPrice({ price }) {
-  return (
-    <div>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <strong className="font-display text-[28px] font-semibold text-[#1F5E3B]">
-          {formatMoney(price)}
-        </strong>
-      </div>
-      <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#D8C98F] bg-[#FCF8E8] px-2.5 py-1 text-[10px] font-bold text-[#766018]">
-        <FiTag aria-hidden="true" /> Save 20% online · LITEPUFF20
-      </p>
-    </div>
-  );
-}
-
-function ShopOfferRibbon() {
-  const copyCoupon = () =>
-    navigator.clipboard?.writeText("LITEPUFF20").catch(() => {});
-  return (
-    <aside
-      className="mb-5 flex w-full max-w-full items-center gap-3 overflow-hidden rounded-2xl border border-[#DDCDAA] bg-[#FCF8EE] p-3"
-      aria-label="Online payment offer"
-    >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#9A7430] shadow-sm">
-        <FiTag aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold leading-5 text-[#243029]">
-          Save 20% on Online Payment
-        </p>
-        <p className="text-xs leading-5 text-[#5F6762]">
-          Use coupon LITEPUFF20 at checkout.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={copyCoupon}
-        className="min-h-11 shrink-0 rounded-full border border-[#1F5E3B] px-3 text-xs font-bold text-[#1F5E3B]"
-      >
-        Copy Code
-      </button>
-    </aside>
-  );
-}
-
 const ProductCard = memo(function ProductCard({ product, onAddToCart }) {
   return (
     <article className="group flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-[28px] border border-[#E7E1D7] bg-white p-4 shadow-[0_8px_24px_rgba(36,48,41,0.045)] transition-transform sm:p-5 md:hover:-translate-y-1">
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[22px] bg-[#FAF8F2] p-5">
         <span className="absolute right-3 top-3 rounded-full bg-[#1F5E3B] px-3 py-1.5 text-[10px] font-black text-white shadow-sm">
-          ONLINE 20% OFF
+          15% OFF
         </span>
         <img
           src={product.image}
@@ -315,7 +271,7 @@ const ProductCard = memo(function ProductCard({ product, onAddToCart }) {
           {product.shortDescription}
         </p>
         <div className="mt-4 flex items-end justify-between gap-3 border-t border-[#ECE7DD] pt-4">
-          <ProductPrice price={product.price} />
+          <ProductPriceDisplay price={product.price} mrp={product.regularPrice || product.oldPrice} priceClassName="text-[28px]" />
           <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.1em] text-[#68706B]">
             {product.weight} · In Stock
           </span>
@@ -421,7 +377,7 @@ export default function Shop() {
         ? {
             ...product,
             ...live,
-            price: 249,
+            price: live.price,
             regularPrice: 249,
             oldPrice: 249,
             image: live.image || product.image,
@@ -508,27 +464,19 @@ export default function Shop() {
       />
       <main className="overflow-x-clip bg-[#FAF8F2] pb-10 md:pb-16">
         <motion.header
-          className="mx-auto max-w-7xl px-4 pb-7 pt-9 text-center sm:px-6 md:pt-14 lg:px-8 lg:pt-16"
+          className="mx-auto max-w-7xl px-4 pb-5 pt-7 text-center sm:px-6 md:pt-9 lg:px-8"
           initial="hidden"
           animate="visible"
           variants={fadeUp}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C9A227]">
-            Shop LitePuff
-          </p>
-          <h1 className="mt-3 text-balance font-display text-[36px] font-semibold leading-[1.06] tracking-[-0.04em] text-[#243029] sm:text-[40px] md:text-[50px]">
-            Discover Your Everyday Crunch
+          <h1 className="text-balance font-display text-[36px] font-semibold leading-[1.06] tracking-[-0.04em] text-[#243029] sm:text-[40px] md:text-[46px]">
+            Shop Your Favourite Snacks
           </h1>
-          <p className="mx-auto mt-4 max-w-[600px] text-base leading-7 text-[#5F6762]">
-            Premium roasted makhana in bold, balanced flavours for better
-            everyday snacking.
+          <p className="mx-auto mt-2 max-w-[600px] text-sm leading-6 text-[#5F6762]">
+            Pick a flavour. Build your box. Snack better.
           </p>
         </motion.header>
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
-          <ShopOfferRibbon />
-        </div>
-
-        <div className="sticky top-20 z-30 mx-auto max-w-[1440px] px-3 md:top-[84px] md:px-6 lg:top-[88px] lg:px-8">
+        <div className="sticky z-30 mx-auto max-w-[1440px] px-3 md:px-6 lg:px-8" style={{ top: 'calc(var(--announcement-height, 0px) + var(--navbar-height) + 4px)' }}>
           <section
             className="w-full max-w-full overflow-hidden rounded-[22px] border border-[#E7E1D7] bg-white p-3 shadow-[0_8px_22px_rgba(36,48,41,0.08)]"
             aria-label="Shop filters"
@@ -637,13 +585,13 @@ export default function Shop() {
         </div>
 
         <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
-          <section className="py-10 md:py-12" aria-labelledby="products-title">
-            <h2 id="products-title" className="sr-only">
-              LitePuff products
-            </h2>
+          <BuildYourBox compact />
+          <section className="pb-7 pt-4 md:pb-9 md:pt-6" aria-labelledby="products-title">
+            <p className="text-xs font-bold uppercase tracking-[.24em] text-[#C89B3C]">Shop LitePuff</p>
+            <h2 id="products-title" className="mt-2 font-display text-4xl font-semibold text-[#243029]">Our Products</h2>
             {visibleProducts.length ? (
               <motion.div
-                className="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+                className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                 initial="hidden"
                 animate="visible"
                 variants={stagger}
@@ -682,7 +630,6 @@ export default function Shop() {
               </motion.div>
             )}
           </section>
-
           <section
             className="border-t border-[#E2DBCF] py-10 md:py-12"
             aria-labelledby="coming-soon-title"

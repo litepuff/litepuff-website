@@ -10,6 +10,8 @@ import mintImage from '../assets/images/products/mint.png';
 import cheeseImage from '../assets/images/products/cheese.png';
 import creamOnionImage from '../assets/images/products/cream-onion.png';
 import saltPepperImage from '../assets/images/products/salt-pepper.png';
+import { useProducts } from '../hooks/useProducts.js';
+import ProductPriceDisplay from './ProductPriceDisplay.jsx';
 
 const products = [
   {
@@ -90,7 +92,7 @@ const ProductCard = memo(function ProductCard({ product, onAdd }) {
         <p className="mt-2 min-h-[44px] text-[13px] leading-[1.6] text-[#5F6762]">{product.description}</p>
 
         <div className="mt-3 flex items-center justify-between gap-2">
-          <div><p className="text-lg font-bold text-[#243029]">{formatMoney(product.price)}</p><p className="text-xs font-medium text-[#68706B]">{product.weight}</p></div>
+          <div><ProductPriceDisplay price={product.price} mrp={product.originalPrice} /><p className="mt-1 text-xs font-medium text-[#68706B]">{product.weight}</p></div>
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1E4D3A]"><span className="h-2 w-2 rounded-full bg-[#4D9B62]" aria-hidden="true" />In Stock</span>
         </div>
 
@@ -117,6 +119,11 @@ const ProductCard = memo(function ProductCard({ product, onAdd }) {
 export default function SignatureCollection() {
   const { addToCart } = useCart();
   const { showToast } = useToast();
+  const { products: liveProducts } = useProducts();
+  const displayProducts = products.map((product) => {
+    const live = liveProducts.find((item) => item.id === product.id || item.slug === product.slug);
+    return live ? { ...product, ...live, image: live.image || product.image, originalPrice: Number(live.regularPrice || live.oldPrice || 249), weight: live.weight || product.weight } : { ...product, price: 211.65, originalPrice: 249 };
+  });
 
   const handleAdd = (product) => {
     addToCart({ ...product, images: [product.image] });
@@ -127,13 +134,13 @@ export default function SignatureCollection() {
     <section className="bg-white py-12 md:py-16 lg:py-20" aria-labelledby="signature-collection-title">
       <div className="mx-auto max-w-[1500px] px-5 sm:px-6 lg:px-8">
         <motion.header className="mx-auto max-w-[720px] text-center" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={fadeUp}>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C89B3C]">Featured Products</p>
-          <h2 id="signature-collection-title" className="mt-3 font-display text-[38px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[48px]">Shop Our Signature Collection</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C89B3C]">Shop LitePuff</p>
+          <h2 id="signature-collection-title" className="mt-3 font-display text-[38px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[48px]">Customer Favourites</h2>
           <p className="mx-auto mt-4 max-w-[620px] text-base leading-7 text-[#5F6762] md:text-lg">Five thoughtfully crafted roasted makhana flavours made with premium ingredients and bold seasonings for healthier everyday snacking.</p>
         </motion.header>
 
         <motion.div className="mt-9 grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-5 lg:gap-4 xl:gap-5" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.08 }} variants={productGrid}>
-          {products.map((product) => <ProductCard key={product.id} product={product} onAdd={handleAdd} />)}
+          {displayProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={handleAdd} />)}
         </motion.div>
       </div>
     </section>

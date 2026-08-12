@@ -5,7 +5,6 @@ const finiteNumber = (value) => {
 
 export const money = (value) => Number(finiteNumber(value).toFixed(2));
 export const discountMoney = (value) => Math.round(finiteNumber(value));
-export const ONLINE_COUPON_CODE = 'LITEPUFF20';
 
 export function calculateOrderPricing({
   items = [],
@@ -16,26 +15,30 @@ export function calculateOrderPricing({
   const normalized = items.map((item) => {
     const quantity = Math.max(0, Number(item.quantity || 0));
     const mrp = money(item.originalPrice ?? item.regularPrice ?? item.oldPrice ?? item.price);
-    return { quantity, mrp };
+    const sellingTotal = money(item.total ?? Number(item.price || 0) * quantity);
+    return { quantity, mrp, sellingTotal, freeDelivery: item.freeDelivery === true };
   });
   const quantity = normalized.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = money(normalized.reduce((sum, item) => sum + item.mrp * item.quantity, 0));
+  const sellingSubtotal = money(normalized.reduce((sum, item) => sum + item.sellingTotal, 0));
+  const productDiscount = money(Math.max(0, subtotal - sellingSubtotal));
   const cod = String(paymentMethod).toLowerCase() === 'cod';
   const normalizedCode = String(couponCode || '').trim().toUpperCase();
-  const couponApplied = !cod && normalizedCode === ONLINE_COUPON_CODE && Number(couponDiscount) > 0;
-  const normalizedCouponDiscount = couponApplied ? money(Math.min(subtotal, Math.max(0, couponDiscount))) : 0;
-  const shipping = cod ? 0 : quantity === 1 ? 29 : 0;
-  const grandTotal = cod ? subtotal : money(Math.max(0, subtotal - normalizedCouponDiscount + shipping));
+  const couponApplied = !cod && Boolean(normalizedCode) && Number(couponDiscount) > 0;
+  const normalizedCouponDiscount = couponApplied ? money(Math.min(sellingSubtotal, Math.max(0, couponDiscount))) : 0;
+  const offerFreeDelivery = normalized.some((item) => item.freeDelivery);
+  const shipping = cod || offerFreeDelivery ? 0 : quantity === 1 ? 29 : 0;
+  const grandTotal = money(Math.max(0, sellingSubtotal - normalizedCouponDiscount + shipping));
   return {
     quantity,
     subtotal,
     mrp: subtotal,
-    sellingSubtotal: subtotal,
-    productDiscount: 0,
+    sellingSubtotal,
+    productDiscount,
     couponDiscount: normalizedCouponDiscount,
     discount: normalizedCouponDiscount,
     shipping,
-    shippingIncluded: cod,
+    shippingIncluded: cod || offerFreeDelivery,
     tax: 0,
     grandTotal,
     paymentMethod: cod ? 'cod' : 'online',

@@ -74,10 +74,9 @@ async function validateLegacyCoupon(request, response) {
     String(order.CouponCode || '').trim().toUpperCase() === code &&
     !['cancelled', 'failed'].includes(String(order.OrderStatus).toLowerCase())
   );
-  const restrictedCoupon = code === 'LITEPUFF20';
   if (alreadyUsed) return response.status(409).json({ success: false, message: 'This coupon has already been used on your account.' });
   const hasCompletedOrder = orders.some((order) => order.CustomerID === request.customer.id && (String(order.PaymentStatus).toLowerCase() === 'paid' || ['completed', 'delivered'].includes(String(order.OrderStatus).toLowerCase())));
-  if (restrictedCoupon && hasCompletedOrder) return response.status(409).json({ success: false, message: 'This coupon is unavailable.' });
+  if (hasCompletedOrder && String(coupon.FirstOrderOnly || '').toLowerCase() === 'true') return response.status(409).json({ success: false, message: 'This coupon is unavailable.' });
 
   let discount = 0;
   let freeShipping = false;
@@ -95,10 +94,14 @@ export async function validateCoupon(request, response) {
   const paymentMethod = String(request.body.paymentMethod || 'online').toLowerCase();
   if (!code) return response.status(400).json({ success: false, message: 'Coupon code is required.' });
   if (paymentMethod === 'cod') return response.status(409).json({ success: false, message: 'Coupon available only for Online Payments.' });
-  if (code !== 'LITEPUFF20') return response.status(404).json({ success: false, message: 'Invalid Coupon Code.' });
   const coupon = (await getRows('COUPONS')).find((item) => String(item.Code || '').trim().toUpperCase() === code);
-  if (coupon && String(coupon.Status || 'active').toLowerCase() !== 'active') return response.status(404).json({ success: false, message: 'Invalid Coupon Code.' });
-  if (coupon?.Expiry && new Date(coupon.Expiry) < new Date()) return response.status(410).json({ success: false, message: 'Offer Expired.' });
-  const discount = Math.round(subtotal * 0.20);
-  ok(response, { coupon: { code, type: 'percent', value: 20, discount, freeShipping: false } }, 'Coupon Applied Successfully.');
+  if (!coupon || String(coupon.Status || 'active').toLowerCase() !== 'active') return response.status(404).json({ success: false, message: 'Invalid Coupon Code.' });
+  if (coupon.Expiry && new Date(coupon.Expiry) < new Date()) return response.status(410).json({ success: false, message: 'Offer Expired.' });
+  if (Number(coupon.MinOrder || 0) > subtotal) return response.status(422).json({ success: false, message: `Minimum order value is ₹${coupon.MinOrder}.` });
+  if (Number(coupon.UsageLimit || 0) && Number(coupon.UsedCount || 0) >= Number(coupon.UsageLimit)) return response.status(409).json({ success: false, message: 'Coupon usage limit reached.' });
+  const type = String(coupon.Type || '').toLowerCase();
+  if (type === 'percent' && Number(coupon.Value) !== 15) return response.status(409).json({ success: false, message: 'This promotion is no longer active.' });
+  let discount = type === 'percent' ? Math.round(subtotal * Number(coupon.Value || 0) / 100) : type === 'flat' ? Number(coupon.Value || 0) : 0;
+  discount = Math.min(discount, Number(coupon.MaxDiscount || discount || 0), subtotal);
+  ok(response, { coupon: { code, type, value: Number(coupon.Value || 0), discount: Number(discount.toFixed(2)), freeShipping: type === 'shipping' } }, 'Coupon Applied Successfully.');
 }

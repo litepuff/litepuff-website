@@ -13,11 +13,13 @@ export function getMetaCatalogId(product = {}) {
 }
 
 export function getMetaCatalogIds(products = []) {
-  return products.map(getMetaCatalogId).filter(Boolean);
+  return products.flatMap((product) => product.type === 'combo'
+    ? (product.items || []).map(getMetaCatalogId)
+    : [getMetaCatalogId(product)]).filter(Boolean);
 }
 
 export function getMetaContents(products = []) {
-  return products.flatMap((product) => {
+  return products.flatMap((product) => product.type === 'combo' ? product.items || [] : [product]).flatMap((product) => {
     const id = getMetaCatalogId(product);
     if (!id) return [];
     return [{

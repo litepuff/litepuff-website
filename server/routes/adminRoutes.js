@@ -24,6 +24,7 @@ import {
   getAdminOrderById,
   getAdminOrders,
   getAdminProducts,
+  getAdminOffers,
   getAdminProfile,
   getAdminReviews,
   updateAdminBlog,
@@ -33,6 +34,7 @@ import {
   updateAdminInventory,
   updateAdminOrderStatus,
   updateAdminProduct,
+  updateAdminOffers,
   updateAdminProfile,
   updateAdminReview
 } from '../controllers/adminController.js';
@@ -58,6 +60,8 @@ router.use('/whatsapp', adminWhatsAppRoutes);
 router.get('/dashboard', requirePermission(PERMISSIONS.ADMIN_DASHBOARD_VIEW), activityLogger('Dashboard Login', 'Dashboard'), handle(getAdminDashboard));
 
 router.get('/products', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_READ), handle(getAdminProducts));
+router.get('/offers', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_READ), handle(getAdminOffers));
+router.put('/offers', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_UPDATE), activityLogger('Offers Updated', 'Products'), handle(updateAdminOffers));
 router.post('/products', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_CREATE), activityLogger('Product Added', 'Products'), handle(createAdminProduct));
 router.put('/products/:id', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_UPDATE), activityLogger('Product Updated', 'Products', (request) => ({ id: request.params.id })), handle(updateAdminProduct));
 router.delete('/products/:id', requirePermission(PERMISSIONS.ADMIN_PRODUCTS_DELETE), activityLogger('Product Deleted', 'Products', (request) => ({ id: request.params.id })), handle(deleteAdminProduct));

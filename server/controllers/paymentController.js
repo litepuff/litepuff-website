@@ -329,6 +329,15 @@ async function createPaymentOrderUnlocked(request, response) {
 export function createPaymentOrder(request, response) { return withCheckoutLock(request.customer.id, () => createPaymentOrderUnlocked(request, response)); }
 
 async function createCashOnDeliveryOrderUnlocked(request, response) {
+  const checkoutRequestId = String(request.body.checkoutRequestId || '').trim().slice(0, 120);
+  if (checkoutRequestId) {
+    const prior = (await getRows('PAYMENTS')).find((row) => row.CustomerID === request.customer.id && row.TransactionReference === `cod:${checkoutRequestId}`);
+    if (prior?.OrderID) {
+      const order = await findRow('ORDERS', (row) => row.OrderID === prior.OrderID);
+      return ok(response, { order, payment: publicPayment(prior), replay: true }, 'Cash on Delivery order was already confirmed.');
+    }
+    if (prior) return response.status(409).json({ success: false, message: 'This Cash on Delivery order is still being processed.' });
+  }
   const paymentId = createId("payment");
   const snapshot = await buildCheckoutIntent({
     customerId: request.customer.id,
@@ -350,7 +359,7 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
     Currency: snapshot.currency,
     Status: "Processing",
     PaidAt: "",
-    TransactionReference: paymentId,
+    TransactionReference: checkoutRequestId ? `cod:${checkoutRequestId}` : paymentId,
     Gateway: "Cash on Delivery",
     Remarks: encodeRemarks({ pricing: { subtotal: snapshot.subtotal, couponDiscount: snapshot.couponDiscount, shipping: snapshot.shipping, shippingIncluded: snapshot.shippingIncluded, tax: snapshot.tax, grandTotal: snapshot.grandTotal, paymentMethod: snapshot.paymentMethod }, metaAttribution: requestMetaAttribution(request), message: "Creating Cash on Delivery order." }),
   });
@@ -360,6 +369,18 @@ async function createCashOnDeliveryOrderUnlocked(request, response) {
   );
   const order = await materializeCashOnDeliveryOrder({ payment, snapshot });
   const saved = await findRow("PAYMENTS", (row) => row.PaymentID === paymentId);
+  scheduleBackgroundTask(
+    "shipment.create",
+    () => createShipment({ ...order, shippingAddress: {
+      name: snapshot.address.fullName,
+      phone: snapshot.address.phone,
+      addressLine: [snapshot.address.addressLine1, snapshot.address.addressLine2, snapshot.address.landmark].filter(Boolean).join(', '),
+      city: snapshot.address.city,
+      state: snapshot.address.state,
+      pincode: snapshot.address.pincode,
+    }, items: snapshot.items }, preferredShippingProvider(), { correlationId: request.id, orderId: order.OrderID, paymentId }),
+    { correlationId: request.id, orderId: order.OrderID, paymentId },
+  );
   scheduleBackgroundTask(
     "notification.cash-on-delivery-success",
     () =>

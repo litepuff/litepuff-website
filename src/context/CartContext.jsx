@@ -3,14 +3,15 @@ import { customerService } from '../services/customerService';
 import { useCustomerAuth } from './CustomerAuthContext';
 import { siteConfig } from '../utils/siteConfig.js';
 import useMetaTracking from '../analytics/useMetaTracking.js';
+import { DEFAULT_OFFER_CONFIG } from '../../shared/offerConfig.js';
 
 const CartContext = createContext(null);
 const normalizePrice = (item) => ({
   ...item,
-  price: siteConfig.productPrice,
-  originalPrice: siteConfig.productMrp,
-  regularPrice: siteConfig.productMrp,
-  oldPrice: siteConfig.productMrp,
+  price: item.type === 'combo' ? Number(item.price) : Number(item.price || (siteConfig.productMrp * (1 - DEFAULT_OFFER_CONFIG.singleDiscountPercent / 100)).toFixed(2)),
+  originalPrice: Number(item.originalPrice || item.regularPrice || item.oldPrice || (item.type === 'combo' ? item.items?.reduce((sum, part) => sum + Number(part.originalPrice || part.price || siteConfig.productMrp) * part.quantity, 0) : siteConfig.productMrp)),
+  regularPrice: Number(item.regularPrice || item.originalPrice || siteConfig.productMrp),
+  oldPrice: Number(item.oldPrice || item.originalPrice || siteConfig.productMrp),
   weight: siteConfig.productWeight,
 });
 
@@ -46,7 +47,7 @@ export function CartProvider({ children }) {
     } catch {
       // Analytics is optional and must never affect cart behavior.
     }
-    if (customer) {
+    if (customer && product.type !== 'combo') {
       customerService.addCart(product.id, quantity).catch(() => {});
     }
   }
@@ -68,6 +69,11 @@ export function CartProvider({ children }) {
     }
   }
 
+  function addComboToCart(combo) {
+    const id = combo.id || `combo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    saveCart([...cartItems, { ...combo, id, type: 'combo', quantity: 1 }]);
+  }
+
   function clearCart() {
     saveCart([]);
     if (customer) {
@@ -75,14 +81,15 @@ export function CartProvider({ children }) {
     }
   }
 
-  const cartTotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
-  const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const cartTotal = cartItems.reduce((total, item) => total + item.price * (item.type === 'combo' ? 1 : item.quantity), 0);
+  const cartCount = cartItems.reduce((total, item) => total + (item.type === 'combo' ? item.items.reduce((sum, part) => sum + part.quantity, 0) : item.quantity), 0);
 
   const value = useMemo(() => ({
     cartItems,
     cartTotal,
     cartCount,
     addToCart,
+    addComboToCart,
     updateQuantity,
     clearCart
   }), [cartItems, cartTotal, cartCount, customer]);

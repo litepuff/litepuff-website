@@ -20,10 +20,10 @@ for (const quantity of [1, 2, 3]) {
     assert.equal(pricing.grandTotal, matrix[quantity].online);
   });
 
-  test(`${quantity} product prepaid LITEPUFF20 total is correct`, () => {
+  test(`${quantity} product prepaid coupon total is correct`, () => {
     const pricing = calculateOrderPricing({
       items: basket(quantity),
-      couponCode: 'LITEPUFF20',
+      couponCode: 'TEST15',
       couponDiscount: matrix[quantity].discount,
       paymentMethod: 'online',
     });
@@ -35,7 +35,7 @@ for (const quantity of [1, 2, 3]) {
   test(`${quantity} product COD ignores coupon and includes shipping`, () => {
     const pricing = calculateOrderPricing({
       items: basket(quantity),
-      couponCode: 'LITEPUFF20',
+      couponCode: 'TEST15',
       couponDiscount: matrix[quantity].discount,
       paymentMethod: 'cod',
     });
@@ -47,8 +47,8 @@ for (const quantity of [1, 2, 3]) {
 }
 
 test('switching from prepaid to COD removes the coupon immediately', () => {
-  const prepaid = calculateOrderPricing({ items: basket(1), couponCode: 'LITEPUFF20', couponDiscount: 50, paymentMethod: 'online' });
-  const cod = calculateOrderPricing({ items: basket(1), couponCode: 'LITEPUFF20', couponDiscount: 50, paymentMethod: 'cod' });
+  const prepaid = calculateOrderPricing({ items: basket(1), couponCode: 'TEST15', couponDiscount: 50, paymentMethod: 'online' });
+  const cod = calculateOrderPricing({ items: basket(1), couponCode: 'TEST15', couponDiscount: 50, paymentMethod: 'cod' });
   assert.equal(prepaid.grandTotal, 228);
   assert.equal(cod.grandTotal, 249);
   assert.equal(cod.offerStatus, 'unavailable_for_cod');
@@ -57,7 +57,7 @@ test('switching from prepaid to COD removes the coupon immediately', () => {
 test('browser and server use the identical centralized engine', () => {
   for (const quantity of [1, 2, 3]) {
     for (const paymentMethod of ['online', 'cod']) {
-      const input = { items: basket(quantity), couponCode: 'LITEPUFF20', couponDiscount: matrix[quantity].discount, paymentMethod };
+      const input = { items: basket(quantity), couponCode: 'TEST15', couponDiscount: matrix[quantity].discount, paymentMethod };
       assert.deepEqual(calculateBrowserPricing(input), calculateOrderPricing(input));
     }
   }

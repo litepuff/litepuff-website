@@ -17,7 +17,8 @@
 }
 
 :root {
-  --announcement-height: 42px;
+  --announcement-height: 0px;
+  --festival-banner-height: 78px;
   --navbar-height: 72px;
   --color-primary: 30 77 58;
   --color-secondary: 200 155 60;
@@ -30,7 +31,7 @@
 }
 
 @media (min-width: 768px) {
-  :root { --navbar-height: 76px; }
+  :root { --navbar-height: 76px; --festival-banner-height: 64px; }
 }
 
 @media (min-width: 1024px) {
@@ -44,6 +45,91 @@
 
 .site-navbar {
   top: var(--announcement-height, 0px);
+}
+
+.festival-sale-bar {
+  background: #173f30;
+  border-bottom: 1px solid rgba(232,198,110,.42);
+  box-shadow: inset 0 -1px rgba(255,255,255,.05);
+}
+
+.festival-sale-bar::before,
+.festival-sale-bar::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.festival-sale-bar::before {
+  inset: 0 0 auto;
+  height: 7px;
+  opacity: .72;
+  background: repeating-linear-gradient(135deg, transparent 0 17px, #d69b3c 17px 25px, transparent 25px 35px);
+}
+
+.festival-sale-bar::after {
+  inset: auto 0 5px;
+  height: 4px;
+  opacity: .45;
+  background: radial-gradient(circle, #e8c66e 1.5px, transparent 2px) 0 0 / 24px 4px repeat-x;
+}
+
+.festival-ticker-track,
+.festival-ticker-group {
+  display: flex;
+  width: max-content;
+  align-items: center;
+}
+
+.festival-ticker-track {
+  position: relative;
+  z-index: 2;
+  animation: festival-ticker 30s linear infinite;
+  will-change: transform;
+}
+
+.festival-sale-bar:hover .festival-ticker-track { animation-play-state: paused; }
+
+.festival-ticker-group { height: 100%; }
+
+.festival-ticker-item {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0 1.75rem;
+  font-size: .79rem;
+}
+
+.festival-ticker-item + .festival-ticker-item { border-left: 1px solid rgba(232,198,110,.3); }
+
+@keyframes festival-ticker { to { transform: translateX(-50%); } }
+
+.festival-campaign-shell {
+  background: #173f30;
+  box-shadow: 0 18px 45px rgba(30,77,58,.14);
+}
+
+.campaign-placeholder {
+  background:
+    radial-gradient(circle at 72% 25%, rgba(255,214,116,.42), transparent 26%),
+    radial-gradient(circle at 22% 78%, rgba(255,241,206,.22), transparent 30%),
+    linear-gradient(135deg, #d86b2f 0%, #a03f52 48%, #1d5a42 100%);
+}
+
+.campaign-placeholder::before,
+.campaign-placeholder::after {
+  content: '';
+  position: absolute;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+}
+.campaign-placeholder::before { width: 180px; height: 180px; right: -55px; top: -55px; }
+.campaign-placeholder::after { width: 110px; height: 110px; left: -28px; bottom: -28px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .festival-ticker-track { animation: none; }
 }
 
 .analytics-meter {

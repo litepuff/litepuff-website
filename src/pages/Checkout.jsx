@@ -12,7 +12,6 @@ import {
   FiTruck,
 } from "react-icons/fi";
 import Seo from "../components/Seo.jsx";
-import OnlinePaymentOffer from "../components/OnlinePaymentOffer.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useCustomerAuth } from "../context/CustomerAuthContext.jsx";
 import { apiMessage, customerService } from "../services/customerService.js";
@@ -152,6 +151,7 @@ export default function Checkout() {
   const [confirmedOrder, setConfirmedOrder] = useState(null);
   const [paymentFailure, setPaymentFailure] = useState(null);
   const checkoutForm = useRef(null);
+  const checkoutRequestId = useRef(globalThis.crypto?.randomUUID?.() || `cod-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const pricingPaymentMethod = paymentMethod === "cod" ? "cod" : "online";
   const estimatedTotals = useOrderPricing(cartItems, { couponCode: appliedCoupon?.code, couponDiscount: appliedCoupon?.discount, paymentMethod: pricingPaymentMethod });
@@ -173,11 +173,6 @@ export default function Checkout() {
       localStorage.removeItem("litepuffCoupon");
     }
   };
-
-  async function selectWelcomeCoupon() {
-    setCoupon("LITEPUFF20");
-    try { await navigator.clipboard.writeText("LITEPUFF20"); } catch { /* Copy is optional on non-secure previews. */ }
-  }
 
   async function applyCoupon() {
     if (paymentMethod === "cod") {
@@ -233,11 +228,12 @@ export default function Checkout() {
         paymentMethod,
         coupon: paymentMethod === "cod" ? "" : appliedCoupon?.code || "",
         notes,
-        items: cartItems.map((item) => ({
-          productId: item.id,
-          quantity: item.quantity,
-        })),
+        items: cartItems.map((item) => item.type === 'combo' ? {
+          type: 'combo', comboType: item.comboType, comboId: item.id,
+          items: item.items.map((selection) => ({ productId: selection.productId || selection.id, quantity: selection.quantity })),
+        } : { productId: item.id, quantity: item.quantity }),
         metaAttribution: getMetaAttribution(),
+        checkoutRequestId: checkoutRequestId.current,
       };
       if (paymentMethod === "cod") {
         const result = await customerService.createCashOnDeliveryOrder(payload);
@@ -433,7 +429,6 @@ export default function Checkout() {
             className="mt-9 grid items-start gap-7 lg:grid-cols-[minmax(0,65fr)_minmax(320px,35fr)]"
           >
             <div className="space-y-6">
-              <OnlinePaymentOffer />
               {paymentFailure && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -599,7 +594,7 @@ export default function Checkout() {
                 <div className="rounded-[24px] border border-[#E1D5B8] bg-[#FCF8EE] p-5 shadow-soft">
                   <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold uppercase tracking-[0.2em] text-[#9A7A18]">Coupon</span>{appliedCoupon && <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 rounded-full bg-[#E5F2E9] px-2.5 py-1 text-[10px] font-bold text-[#1F5E3B]"><FiCheckCircle /> Coupon Applied Successfully</motion.span>}</div>
                   <div className="mt-3 flex gap-2"><input aria-label="Coupon code" value={coupon} disabled={paymentMethod === "cod"} onChange={(event) => { setCoupon(event.target.value.toUpperCase()); setAppliedCoupon(null); setServerPricing(null); }} placeholder={paymentMethod === "cod" ? "Online payments only" : "Enter coupon code"} className="h-12 min-w-0 flex-1 rounded-xl border border-[#DDD3BE] bg-white px-4 text-sm outline-none disabled:cursor-not-allowed disabled:bg-[#F2EFE8] disabled:text-[#8A8F8C]" /><button type="button" disabled={paymentMethod === "cod" || !coupon.trim()} onClick={applyCoupon} className="h-12 rounded-xl bg-[#1F5E3B] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">Apply</button></div>
-                  <button type="button" disabled={paymentMethod === "cod"} onClick={selectWelcomeCoupon} className="mt-3 flex w-full items-center justify-between rounded-xl border border-dashed border-[#C9A227] bg-white px-3 py-2.5 text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"><span><strong className="block text-xs tracking-[0.08em] text-[#1F5E3B]">LITEPUFF20</strong><span className="text-[11px] text-[#6B726D]">20% OFF · Online Payment</span></span><span className="text-xs font-bold text-[#1F5E3B]">Copy Coupon</span></button>
+                  <p className="mt-3 text-[11px] text-[#6B726D]">Active coupons are validated securely before payment.</p>
                   {paymentMethod === "cod" && <p className="mt-3 text-xs font-semibold text-[#8A6424]">Coupon available only for Online Payments.</p>}
                 </div>
                 <label className="rounded-[24px] border border-[#ECE7DD] bg-white p-5 shadow-soft">
@@ -637,10 +632,8 @@ export default function Checkout() {
                 ))}
               </div>
               <div className="mt-6 space-y-3 border-t border-[#ECE7DD] pt-5">
-                <SummaryRow
-                  label="MRP"
-                  value={formatMoney(totals.subtotal)}
-                />
+                <SummaryRow label="MRP" value={formatMoney(totals.subtotal)} />
+                {totals.productDiscount > 0 && <SummaryRow label="Product Discount" value={`-${formatMoney(totals.productDiscount)}`} />}
                 {totals.couponDiscount > 0 && <SummaryRow label="Coupon Discount" value={`-${formatMoney(totals.couponDiscount)}`} />}
                 <SummaryRow label={paymentMethod === "cod" ? "Shipping Included" : "Shipping"} value={paymentMethod === "cod" ? "Included" : totals.shipping ? formatMoney(totals.shipping) : "FREE"} />
                 <SummaryRow label="Tax" value="Included" />
@@ -653,7 +646,7 @@ export default function Checkout() {
               <div className="mt-6 rounded-2xl bg-[#F8F6F0] p-4 text-sm text-[#5B5F59]">
                 <FiTruck className="mb-2 text-[#1E4D3A]" />
                 Estimated delivery:{" "}
-                <strong className="text-[#243029]">3 days</strong>
+                    <strong className="text-[#243029]">1–2 Days</strong>
               </div>
               <motion.button
                 type="submit"

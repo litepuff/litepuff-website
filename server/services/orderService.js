@@ -3,6 +3,8 @@ import { env } from "../config/env.js";
 import { appendRow, batchUpdateRows, deleteRow, getRows, updateRow } from "./googleSheets.js";
 import { productPricing } from "../utils/productPricing.js";
 import { calculateOrderPricing } from "../../shared/orderPricing.js";
+import { singleOfferPrice } from "../../shared/offerConfig.js";
+import { comboDefinition, getOfferConfig } from "./offerService.js";
 
 const money = (value) => Number(Number(value || 0).toFixed(2));
 const discountMoney = (value) => Math.round(Number(value || 0));
@@ -49,13 +51,24 @@ function normalizeAddress(address = {}) {
 }
 
 function normalizeItems(items = []) {
-  const normalized = items
-    .map((item) => ({
-      productId: String(item.productId || item.id || "").trim(),
+  return items.map((item, index) => {
+    if (String(item.type).toLowerCase() === 'combo') {
+      return {
+        type: 'combo',
+        comboType: String(item.comboType || '').toUpperCase(),
+        comboId: String(item.comboId || item.id || `combo-${index + 1}`).trim(),
+        items: Array.isArray(item.items) ? item.items.map((selection) => ({
+          productId: String(selection.productId || selection.id || '').trim(),
+          quantity: Math.min(100, Math.max(1, Math.floor(Number(selection.quantity || 1)))),
+        })).filter((selection) => selection.productId) : [],
+      };
+    }
+    return {
+      type: 'product',
+      productId: String(item.productId || item.id || '').trim(),
       quantity: Math.min(100, Math.max(1, Math.floor(Number(item.quantity || 1)))),
-    }))
-    .filter((item) => item.productId);
-  return [...normalized.reduce((map, item) => map.set(item.productId, { productId: item.productId, quantity: (map.get(item.productId)?.quantity || 0) + item.quantity }), new Map()).values()];
+    };
+  }).filter((item) => item.type === 'combo' || item.productId);
 }
 
 async function pricedCart(customerId, requestedItems = []) {
@@ -64,13 +77,44 @@ async function pricedCart(customerId, requestedItems = []) {
     items = (await getRows("CART"))
       .filter((row) => row.CustomerID === customerId)
       .map((row) => ({
-        productId: row.ProductID,
+        type: 'product', productId: row.ProductID,
         quantity: Math.max(1, Number(row.Quantity || 1)),
       }));
   if (!items.length) throw httpError("Your cart is empty.");
 
-  const products = await getRows("PRODUCTS");
-  return items.map((item) => {
+  const [products, offerConfig] = await Promise.all([getRows("PRODUCTS"), getOfferConfig()]);
+  const requiredStock = new Map();
+  const addRequired = (productId, quantity) => requiredStock.set(productId, (requiredStock.get(productId) || 0) + quantity);
+  items.forEach((line) => line.type === 'combo'
+    ? line.items.forEach((item) => addRequired(item.productId, item.quantity))
+    : addRequired(line.productId, line.quantity));
+  for (const [productId, quantity] of requiredStock) {
+    const product = products.find((row) => row.ProductID === productId && String(row.Status || 'active').toLowerCase() === 'active');
+    if (!product || Number(product.Stock || 0) < quantity) throw httpError("One or more cart items are unavailable.", 409);
+  }
+
+  return items.flatMap((item, lineIndex) => {
+    if (item.type === 'combo') {
+      const combo = comboDefinition(offerConfig, item.comboType);
+      const selectedQuantity = item.items.reduce((sum, selection) => sum + selection.quantity, 0);
+      if (!combo || !combo.enabled || selectedQuantity !== combo.requiredItems) throw httpError('Select exactly the required number of available products for this combo.', 422);
+      let allocated = 0;
+      const unitPrice = money(combo.price / combo.requiredItems);
+      return item.items.map((selection, selectionIndex) => {
+        const product = products.find((row) => row.ProductID === selection.productId);
+        const isLast = selectionIndex === item.items.length - 1;
+        const total = isLast ? money(combo.price - allocated) : money(unitPrice * selection.quantity);
+        allocated = money(allocated + total);
+        return {
+          type: 'combo', comboId: item.comboId || `combo-${lineIndex + 1}`, comboType: item.comboType,
+          comboName: `LitePuff ${combo.requiredItems}-Product Combo`, comboPrice: combo.price,
+          freeDelivery: combo.freeDelivery, productId: product.ProductID,
+          metaCatalogId: String(product.MetaCatalogID || '').trim(), productName: product.Name,
+          price: money(total / selection.quantity), originalPrice: Number(product.Price || productPricing().mrp),
+          productDiscount: 0, quantity: selection.quantity, total,
+        };
+      });
+    }
     const product = products.find(
       (row) =>
         row.ProductID === item.productId &&
@@ -78,8 +122,10 @@ async function pricedCart(customerId, requestedItems = []) {
     );
     if (!product || Number(product.Stock || 0) < item.quantity)
       throw httpError("One or more cart items are unavailable.", 409);
-    const { mrp: originalPrice, sellingPrice: price } = productPricing();
-    return {
+    const originalPrice = Number(product.Price || productPricing().mrp);
+    const price = singleOfferPrice(originalPrice, offerConfig);
+    return [{
+      type: 'product', comboId: '', comboType: '', comboName: '', comboPrice: 0, freeDelivery: false,
       productId: product.ProductID,
       metaCatalogId: String(product.MetaCatalogID || '').trim(),
       productName: product.Name,
@@ -88,7 +134,7 @@ async function pricedCart(customerId, requestedItems = []) {
       productDiscount: money((originalPrice - price) * item.quantity),
       quantity: item.quantity,
       total: money(price * item.quantity),
-    };
+    }];
   });
 }
 
@@ -136,11 +182,16 @@ async function priceOnlineCoupon(code, subtotal, paymentMethod) {
   const normalized = String(code || "").trim().toUpperCase();
   if (String(paymentMethod).toLowerCase() === "cod") return { code: "", discount: 0, row: null, freeShipping: false };
   if (!normalized) return { code: "", discount: 0, row: null, freeShipping: false };
-  if (normalized !== "LITEPUFF20") throw httpError("Invalid Coupon Code.", 404);
   const coupon = (await getRows("COUPONS")).find((row) => String(row.Code || "").trim().toUpperCase() === normalized);
-  if (coupon && String(coupon.Status || "active").toLowerCase() !== "active") throw httpError("Invalid Coupon Code.", 404);
-  if (coupon?.Expiry && new Date(coupon.Expiry) < new Date()) throw httpError("Offer Expired.", 410);
-  return { code: normalized, discount: discountMoney(subtotal * 0.20), row: coupon || null, freeShipping: false };
+  if (!coupon || String(coupon.Status || "active").toLowerCase() !== "active") throw httpError("Invalid Coupon Code.", 404);
+  if (coupon.Expiry && new Date(coupon.Expiry) < new Date()) throw httpError("Offer Expired.", 410);
+  if (Number(coupon.MinOrder || 0) > subtotal) throw httpError(`Minimum order value is ₹${coupon.MinOrder}.`, 422);
+  if (Number(coupon.UsageLimit || 0) && Number(coupon.UsedCount || 0) >= Number(coupon.UsageLimit)) throw httpError("Coupon usage limit reached.", 409);
+  const type = String(coupon.Type || '').toLowerCase();
+  if (type === 'percent' && Number(coupon.Value) !== 15) throw httpError('This promotion is no longer active.', 409);
+  let discount = type === 'percent' ? discountMoney(subtotal * Number(coupon.Value || 0) / 100) : type === 'flat' ? money(coupon.Value) : 0;
+  discount = money(Math.min(discount, Number(coupon.MaxDiscount || discount || 0), subtotal));
+  return { code: normalized, discount, row: coupon, freeShipping: type === 'shipping' };
 }
 
 export async function buildCheckoutIntent({
@@ -151,9 +202,10 @@ export async function buildCheckoutIntent({
   paymentId,
   paymentMethod = "online",
 }) {
-  const pricedItems = await pricedCart(customerId, items);
+  const requestedItems = normalizeItems(items);
+  const pricedItems = await pricedCart(customerId, requestedItems);
   const preliminary = calculateOrderPricing({ items: pricedItems });
-  const coupon = await priceOnlineCoupon(couponCode, preliminary.subtotal, paymentMethod);
+  const coupon = await priceOnlineCoupon(couponCode, preliminary.sellingSubtotal, paymentMethod);
   const pricing = calculateOrderPricing({
     items: pricedItems,
     couponCode: coupon.code,
@@ -165,6 +217,7 @@ export async function buildCheckoutIntent({
     customerId,
     address: normalizeAddress(address),
     items: pricedItems,
+    requestedItems,
     couponCode: coupon.code,
     ...pricing,
     currency: "INR",
@@ -234,7 +287,7 @@ async function materializeOrderUnlocked({
     : await buildCheckoutIntent({
         customerId: snapshot.customerId,
         address: snapshot.address,
-        items: snapshot.items,
+        items: snapshot.requestedItems || snapshot.items,
         couponCode: snapshot.couponCode,
         paymentId: snapshot.paymentId,
         paymentMethod: snapshot.paymentMethod || (paymentMethod === "Cash on Delivery" ? "cod" : "online"),
@@ -252,7 +305,7 @@ async function materializeOrderUnlocked({
   await updateRow("PAYMENTS", payment._row, payment);
   const now = new Date().toISOString();
   const estimated = new Date();
-  estimated.setDate(estimated.getDate() + 3);
+  estimated.setDate(estimated.getDate() + 2);
   const addressId = `address-${payment.PaymentID}`;
   if (!(await getRows("ADDRESSES")).some((row) => row.AddressID === addressId))
     await appendRow("ADDRESSES", {
@@ -298,6 +351,7 @@ async function materializeOrderUnlocked({
   const products = await getRows("PRODUCTS");
   const existingItems = await getRows("ORDER_ITEMS");
   const createdItems = [];
+  const createdItemRecords = [];
   const inventoryUpdates = [];
   for (const [index, item] of revalidated.items.entries()) {
     const orderItemId = `item-${payment.PaymentID}-${index + 1}`;
@@ -307,15 +361,25 @@ async function materializeOrderUnlocked({
       OrderID: orderId,
       ProductID: item.productId,
       MetaCatalogID: item.metaCatalogId,
+      LineType: item.type,
+      ComboID: item.comboId,
+      ComboType: item.comboType,
+      ComboName: item.comboName,
+      ComboPrice: item.comboPrice,
+      FreeDelivery: item.freeDelivery,
       ProductName: item.productName,
       Price: item.price,
       Quantity: item.quantity,
       Total: item.total,
     });
     createdItems.push(orderItemId);
-    const product = products.find((row) => row.ProductID === item.productId);
-    if (!product || Number(product.Stock) < item.quantity) throw httpError("Inventory changed while confirming this order.", 409);
-    product.Stock = Number(product.Stock) - item.quantity;
+    createdItemRecords.push(item);
+  }
+  const requiredInventory = createdItemRecords.reduce((map, item) => map.set(item.productId, (map.get(item.productId) || 0) + item.quantity), new Map());
+  for (const [productId, quantity] of requiredInventory) {
+    const product = products.find((row) => row.ProductID === productId);
+    if (!product || Number(product.Stock) < quantity) throw httpError("Inventory changed while confirming this order.", 409);
+    product.Stock = Number(product.Stock) - quantity;
     inventoryUpdates.push({ rowNumber: product._row, record: product });
   }
   try {

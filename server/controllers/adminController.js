@@ -16,6 +16,7 @@ import { AppError } from "../utils/AppError.js";
 import { logger } from "../utils/logger.js";
 import { productPricing } from "../utils/productPricing.js";
 import { adminSheetsService } from "../services/AdminSheetsService.js";
+import { getOfferConfig, saveOfferConfig } from "../services/offerService.js";
 
 const now = () => new Date().toISOString();
 const money = (value) => Number(Number(value || 0).toFixed(2));
@@ -113,7 +114,7 @@ const orderDto = (row, customer = null, items = [], payment = null, shipment = n
   orderNumber: row.OrderNumber,
   customerId: row.CustomerID,
   customer,
-  items,
+  items: items.map((item) => ({ ...item, type: item.LineType || 'product', comboId: item.ComboID || '', comboType: item.ComboType || '', comboName: item.ComboName || '', comboPrice: Number(item.ComboPrice || 0), freeDelivery: bool(item.FreeDelivery) })),
   subtotal: Number(row.Subtotal || 0),
   productDiscount: Number(row.ProductDiscount || 0),
   couponDiscount: Number(row.CouponDiscount || 0),
@@ -414,6 +415,14 @@ export async function getAdminProducts(request, response) {
     rows = rows.filter((row) => row.Category === request.query.category);
   const page = paginate(rows.map(productDto), request);
   ok(response, { products: page.data, pagination: page.pagination });
+}
+
+export async function getAdminOffers(request, response) {
+  ok(response, { offers: await getOfferConfig() });
+}
+
+export async function updateAdminOffers(request, response) {
+  ok(response, { offers: await saveOfferConfig(request.body) }, 'Offer configuration updated.');
 }
 
 export async function createAdminProduct(request, response) {

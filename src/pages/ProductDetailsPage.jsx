@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { FiCheck, FiHeart } from 'react-icons/fi';
 import { Link, useParams } from 'react-router-dom';
 import Seo from '../components/Seo.jsx';
-import OnlinePaymentOffer from '../components/OnlinePaymentOffer.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { productLabelData } from '../data/productLabelData.js';
 import cheeseImage from '../assets/images/products/cheese.png';
@@ -19,6 +18,7 @@ import { contentService } from '../services/contentService';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import useMetaTracking from '../analytics/useMetaTracking.js';
 import ProductReviews from '../components/reviews/ProductReviews.jsx';
+import ProductPriceDisplay from '../components/ProductPriceDisplay.jsx';
 
 const productImages = {
   Cheese: cheeseImage,
@@ -270,7 +270,7 @@ function RecommendationCard({ product }) {
         <div className="pt-5">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#C89B3C]">{product.category}</p>
           <h3 className="mt-2 font-display text-[28px] font-semibold leading-none tracking-[-0.03em]">{product.name}</h3>
-          <p className="mt-3 text-sm font-semibold">{formatMoney(product.price)}</p>
+          <ProductPriceDisplay className="mt-3" price={product.price} mrp={product.oldPrice || product.regularPrice} />
           <span className="mt-4 inline-block text-sm font-semibold text-[#1E4D3A]">View Product &rarr;</span>
         </div>
       </Link>
@@ -345,15 +345,10 @@ export default function ProductDetailsPage() {
 
   const label = productLabelData[product.flavour];
   const image = productImages[product.flavour];
-  const discount = product.oldPrice > product.price
-    ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
-    : 0;
-
   return (
     <>
       <Seo title={product.name} description={product.shortDescription} path={`/products/${product.slug}`} image={image} structuredData={{ '@context': 'https://schema.org', '@type': 'Product', name: product.name, image, description: product.shortDescription, sku: product.id, offers: { '@type': 'Offer', priceCurrency: 'INR', price: product.price, availability: 'https://schema.org/InStock' }, ...(reviewSummary.count ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: reviewSummary.averageRating, reviewCount: reviewSummary.count } } : {}) }} />
       <main className="bg-[#FAF8F2] pb-12 text-brand-text md:pb-[60px] lg:pb-20">
-        <div className="container-page pt-6"><OnlinePaymentOffer /></div>
         {/* Breadcrumb */}
         <nav className="container-page flex items-center gap-2 py-4 text-xs text-brand-text/50" aria-label="Breadcrumb">
           <Link to="/" className="transition-colors hover:text-[#1E4D3A]">Home</Link><span aria-hidden="true">/</span>
@@ -374,11 +369,7 @@ export default function ProductDetailsPage() {
               <span className="text-brand-text/50">({reviewSummary.count} reviews)</span>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-baseline gap-3">
-              <span className="text-[30px] font-semibold tracking-[-0.03em]">{formatMoney(product.price)}</span>
-              {product.oldPrice > product.price && <span className="text-sm text-brand-text/35 line-through">{formatMoney(product.oldPrice)}</span>}
-              {discount > 0 && <span className="rounded-full bg-[#E5EFE8] px-3 py-1 text-[11px] font-bold text-[#1E4D3A]">Save {discount}%</span>}
-            </div>
+            <ProductPriceDisplay className="mt-4" price={product.price} mrp={product.oldPrice || product.regularPrice} priceClassName="text-[30px] tracking-[-0.03em]" />
 
             <p className="mt-4 line-clamp-3 max-w-[650px] text-base leading-[1.8] text-brand-text/65">{product.shortDescription}</p>
 

@@ -22,7 +22,7 @@ export const SHEET_SCHEMAS = Object.freeze({
   WISHLIST: ['WishlistID', 'CustomerID', 'ProductID', 'CreatedAt'],
   ADDRESSES: ['AddressID', 'CustomerID', 'FullName', 'Phone', 'AddressLine1', 'AddressLine2', 'Landmark', 'City', 'State', 'Pincode', 'Country', 'AddressType', 'IsDefault', 'CreatedAt'],
   ORDERS: ['OrderID', 'OrderNumber', 'CustomerID', 'AddressID', 'Subtotal', 'ProductDiscount', 'FirstOrderDiscount', 'CouponDiscount', 'Shipping', 'Discount', 'Tax', 'GrandTotal', 'CouponCode', 'PaymentMethod', 'PaymentStatus', 'OrderStatus', 'TrackingNumber', 'EstimatedDelivery', 'CreatedAt', 'UpdatedAt', 'ShippingProvider', 'ShipmentID', 'AWBNumber', 'CourierName', 'TrackingURL', 'ShippingStatus', 'PickupStatus', 'LabelURL', 'ManifestURL', 'ShippingCreatedAt', 'ShippingUpdatedAt'],
-  ORDER_ITEMS: ['OrderItemID', 'OrderID', 'ProductID', 'ProductName', 'Price', 'Quantity', 'Total', 'MetaCatalogID'],
+  ORDER_ITEMS: ['OrderItemID', 'OrderID', 'ProductID', 'ProductName', 'Price', 'Quantity', 'Total', 'MetaCatalogID', 'LineType', 'ComboID', 'ComboType', 'ComboName', 'ComboPrice', 'FreeDelivery'],
   PAYMENTS: ['PaymentID', 'OrderID', 'CustomerID', 'RazorpayOrderID', 'RazorpayPaymentID', 'RazorpaySignature', 'PaymentMethod', 'Amount', 'Currency', 'Status', 'PaidAt', 'TransactionReference', 'Gateway', 'Remarks'],
   ORDER_TRACKING: ['TrackingID', 'OrderID', 'CurrentStatus', 'UpdatedBy', 'Remarks', 'UpdatedAt', 'EstimatedDeliveryDate'],
   COUPONS: ['CouponID', 'Code', 'Type', 'Value', 'MinOrder', 'MaxDiscount', 'Expiry', 'UsageLimit', 'UsedCount', 'Status'],
