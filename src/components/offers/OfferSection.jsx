@@ -7,6 +7,7 @@ import { useCart } from '../../context/CartContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useOffers } from '../../hooks/useOffers.js';
 import { formatMoney } from '../../utils/formatMoney.js';
+import { getLocalProductImage, getProductImage } from '../../utils/productImage.js';
 
 function OfferCard({ badge, title, price, detail, action, featured = false }) {
   return <article className={`relative rounded-[28px] border bg-white p-6 ${featured ? 'border-[#C9A227] shadow-[0_14px_36px_rgba(36,48,41,.08)]' : 'border-[#E7E1D7]'}`}>
@@ -53,7 +54,7 @@ export default function OfferSection({ products = [], compact = false, showCards
     if (selectedCount !== offer.requiredItems) return;
     const items = Object.entries(selected).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => {
       const product = available.find((item) => item.id === productId);
-      return { productId, id: productId, quantity, name: product?.name, productName: product?.name, metaCatalogId: product?.metaCatalogId, price: product?.price, image: product?.image };
+      return { productId, id: productId, quantity, name: product?.name, productName: product?.name, metaCatalogId: product?.metaCatalogId, price: product?.price, image: getProductImage(product) };
     });
     addComboToCart({ comboType: builder, name: `LitePuff ${offer.requiredItems}-Product Combo`, items, price: offer.price, freeDelivery: offer.freeDelivery });
     setBuilder(null);
@@ -83,7 +84,7 @@ export default function OfferSection({ products = [], compact = false, showCards
             const quantity = selected[product.id] || 0;
             return <motion.article layout={!reduceMotion} key={product.id} className={`relative flex min-w-0 flex-col rounded-[18px] border bg-white p-2.5 transition-colors duration-200 ${quantity > 0 ? 'border-[#1F5E3B] shadow-[0_6px_18px_rgba(30,77,58,.09)]' : 'border-[#E7E1D7]'}`}>
               {quantity > 0 && <span className="absolute right-2 top-2 z-10 grid h-6 min-w-6 place-items-center rounded-full bg-[#1F5E3B] px-1 text-[11px] font-black text-white">{quantity}</span>}
-              <div className="aspect-square overflow-hidden rounded-[13px] bg-[#FAF8F2] p-2"><img src={product.image || product.primaryImage} alt={product.name} className="h-full w-full object-contain transition duration-200 hover:scale-[1.03]" /></div>
+              <div className="aspect-square overflow-hidden rounded-[13px] bg-[#FAF8F2] p-2"><img src={getProductImage(product)} alt={`${product.name} LitePuff jar`} className="h-full w-full object-contain transition duration-200 hover:scale-[1.03]" loading="lazy" decoding="async" onError={(event) => { const fallback = getLocalProductImage(product); if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback; }} /></div>
               <h3 className="mt-2 truncate text-sm font-bold text-[#243029]">{product.name}</h3><p className="truncate text-[11px] text-[#65706A]">{product.flavour || product.flavor || product.category}</p>
               <div className="mt-2 flex h-9 items-center justify-between rounded-full border border-[#DDD5C8] bg-[#FAF8F2]">
                 <button type="button" disabled={!quantity} className="grid h-9 w-9 place-items-center rounded-full text-[#1F5E3B] disabled:text-[#B9B4AA]" onClick={() => change(product.id, -1)} aria-label={`Remove ${product.name}`}><FiMinus /></button><span className="w-5 text-center text-sm font-black">{quantity}</span><button type="button" disabled={selectedCount >= offer.requiredItems} className="grid h-9 w-9 place-items-center rounded-full text-[#1F5E3B] disabled:text-[#B9B4AA]" onClick={() => change(product.id, 1)} aria-label={`Add ${product.name}`}><FiPlus /></button>
