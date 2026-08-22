@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -25,6 +25,9 @@ import oatsChipsImage from "../assets/images/products/oats-chips.png";
 import { useProducts } from "../hooks/useProducts.js";
 import BuildYourBox from "../components/storefront/BuildYourBox.jsx";
 import ProductPriceDisplay from "../components/ProductPriceDisplay.jsx";
+import TrustStrip from "../components/TrustStrip.jsx";
+import FinalShopCta from "../components/FinalShopCta.jsx";
+import shopBanner from "../assets/images/banner.png";
 
 export const shopProducts = [
   {
@@ -334,7 +337,7 @@ const UpcomingCard = memo(function UpcomingCard({ product }) {
 
 export default function Shop() {
   const { addToCart } = useCart();
-  const { trackViewCategory } = useMetaTracking();
+  const { trackSearch, trackViewCategory } = useMetaTracking();
   const { products: sheetProducts } = useProducts();
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -342,6 +345,7 @@ export default function Shop() {
   const [flavourFilter, setFlavourFilter] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+  const lastTrackedSearch = useRef("");
   const selectFilter = (setter, filterName, currentValue) => (event) => {
     const nextValue = event.target.value;
     if (nextValue === currentValue) return;
@@ -357,6 +361,13 @@ export default function Shop() {
     const timer = window.setTimeout(() => setDebouncedSearch(searchQuery), 300);
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    const query = debouncedSearch.trim().replace(/\s+/g, " ");
+    if (query.length < 2 || query === lastTrackedSearch.current) return;
+    lastTrackedSearch.current = query;
+    trackSearch(query);
+  }, [debouncedSearch, trackSearch]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -464,18 +475,15 @@ export default function Shop() {
       />
       <main className="overflow-x-clip bg-[#FAF8F2] pb-10 md:pb-16">
         <motion.header
-          className="mx-auto max-w-7xl px-4 pb-5 pt-7 text-center sm:px-6 md:pt-9 lg:px-8"
+          className="mx-auto grid max-w-7xl items-center gap-7 px-4 py-10 sm:px-6 md:grid-cols-[.8fr_1.2fr] md:py-14 lg:px-8"
           initial="hidden"
           animate="visible"
           variants={fadeUp}
         >
-          <h1 className="text-balance font-display text-[36px] font-semibold leading-[1.06] tracking-[-0.04em] text-[#243029] sm:text-[40px] md:text-[46px]">
-            Shop Your Favourite Snacks
-          </h1>
-          <p className="mx-auto mt-2 max-w-[600px] text-sm leading-6 text-[#5F6762]">
-            Pick a flavour. Build your box. Snack better.
-          </p>
+          <div><p className="text-xs font-bold uppercase tracking-[.28em] text-[#A97826]">The LitePuff Shop</p><h1 className="mt-3 text-balance font-display text-[44px] font-semibold leading-[.98] tracking-[-0.04em] text-[#243029] sm:text-5xl lg:text-[60px]">Find your favourite crunch.</h1><p className="mt-4 max-w-[520px] text-base leading-7 text-[#5F6762]">Choose a flavour, build your own box and make everyday snacking more rewarding.</p><a href="#products-title" className="mt-6 inline-flex h-12 items-center gap-2 rounded-full bg-[#1E4D3A] px-6 text-sm font-bold text-white">Shop Makhana <FiArrowRight /></a></div>
+          <div className="overflow-hidden rounded-[26px] bg-[#F1E8D7]"><img src={shopBanner} alt="LitePuff snack collection" width="1899" height="828" className="block h-auto w-full object-contain" loading="eager" decoding="async" /></div>
         </motion.header>
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8"><BuildYourBox /><nav className="scrollbar-hidden flex gap-2 overflow-x-auto border-b border-[#DDD5C8] py-6" aria-label="Shop categories">{[['All','products-title'],['Makhana','products-title'],['Chips','coming-soon-title'],['Coming Soon','coming-soon-title']].map(([label,target]) => <button key={label} type="button" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' })} className="shrink-0 rounded-full border border-[#D8CFC0] bg-white px-5 py-2.5 text-xs font-bold uppercase tracking-[.12em] text-[#243029] transition hover:border-[#1E4D3A] hover:bg-[#1E4D3A] hover:text-white">{label}</button>)}</nav></div>
         <div className="sticky z-30 mx-auto max-w-[1440px] px-3 md:px-6 lg:px-8" style={{ top: 'calc(var(--announcement-height, 0px) + var(--navbar-height) + 4px)' }}>
           <section
             className="w-full max-w-full overflow-hidden rounded-[22px] border border-[#E7E1D7] bg-white p-3 shadow-[0_8px_22px_rgba(36,48,41,0.08)]"
@@ -585,7 +593,6 @@ export default function Shop() {
         </div>
 
         <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
-          <BuildYourBox compact />
           <section className="pb-7 pt-4 md:pb-9 md:pt-6" aria-labelledby="products-title">
             <p className="text-xs font-bold uppercase tracking-[.24em] text-[#C89B3C]">Shop LitePuff</p>
             <h2 id="products-title" className="mt-2 font-display text-4xl font-semibold text-[#243029]">Our Products</h2>
@@ -630,6 +637,7 @@ export default function Shop() {
               </motion.div>
             )}
           </section>
+          <section className="my-4 flex flex-col items-start justify-between gap-5 border-y border-[#DCD3C5] py-8 sm:flex-row sm:items-center" aria-label="Build your own LitePuff box"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#A97826]">Build Your Own Box</p><h2 className="mt-2 font-display text-3xl font-semibold text-[#243029]">Your flavours. Your perfect combo.</h2></div><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('litepuff:open-combo', { detail: { comboType: 'COMBO_2' } }))} className="inline-flex h-12 shrink-0 items-center gap-2 rounded-full bg-[#1E4D3A] px-6 text-sm font-bold text-white">Start Building <FiArrowRight /></button></section>
           <section
             className="border-t border-[#E2DBCF] py-10 md:py-12"
             aria-labelledby="coming-soon-title"
@@ -662,6 +670,8 @@ export default function Shop() {
             </motion.div>
           </section>
         </div>
+        <TrustStrip />
+        <FinalShopCta />
       </main>
     </>
   );

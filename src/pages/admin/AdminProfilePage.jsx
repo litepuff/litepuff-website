@@ -40,7 +40,7 @@ export default function AdminProfilePage() {
           <p className="mt-2 text-sm text-brand-muted">Admin identity and password security are managed through the protected admin database.</p>
           <button onClick={createBackup} className="mt-5 rounded-2xl bg-brand-primary px-5 py-3 text-sm font-black text-white">Create Backup</button>
           <button onClick={logout} className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700">Logout</button>
-          {backups.length ? <div className="mt-5 grid gap-2 text-xs text-brand-muted">{backups.slice(0, 5).map((backup) => <span key={backup.BackupID}>{backup.FileName}</span>)}</div> : null}
+          {backups.length ? <div className="mt-5 grid gap-2 text-xs text-brand-muted">{backups.slice(0, 5).map((backup) => <span key={backup.backupId}>{backup.fileName}</span>)}</div> : null}
         </aside>
       </div>
     </section>

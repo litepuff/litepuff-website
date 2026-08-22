@@ -1,95 +1,22 @@
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { FiCheckCircle } from 'react-icons/fi';
-import heroFallback from '../assets/images/hero/hero-img-1.png';
-
-const heroImageModules = import.meta.glob('../assets/images/hero/*.{png,jpg,jpeg,webp}', {
-  eager: true,
-  import: 'default',
-});
-
-const heroSlides = [
-  { id: 'hero-img-1', title: 'LitePuff morning ritual' },
-  { id: 'hero-img-2', title: 'LitePuff office break' },
-  { id: 'hero-img-3', title: 'LitePuff travel companion' },
-  { id: 'hero-img-4', title: 'LitePuff movie night' },
-  { id: 'hero-img-5', title: 'LitePuff everyday snacking' },
-  { id: 'hero-img-6', title: 'LitePuff shared moments' },
-];
-
-const trustBadges = [
-  '100% Roasted',
-  'Never Fried',
-  'Gluten Free',
-  'No Maida',
-  'Heart Friendly',
-  'Premium Ingredients',
-];
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 18 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
-};
-
-const staggeredBadges = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.06, delayChildren: 0.2 } },
-};
-
-function resolveHeroImage(slideId) {
-  const matchedPath = Object.keys(heroImageModules).find((path) => path.includes(`${slideId}.`));
-  return matchedPath ? heroImageModules[matchedPath] : heroFallback;
-}
+import { motion, useReducedMotion } from 'framer-motion';
+import { FiArrowRight } from 'react-icons/fi';
+import productHero from '../assets/images/hero/product-hero.png';
 
 export default function Hero() {
-  const slides = useMemo(
-    () => heroSlides.map((slide) => ({ ...slide, src: resolveHeroImage(slide.id) })),
-    [],
-  );
-  const activeSlide = slides[0];
-
-  return (
-    <section className="home-hero relative overflow-hidden bg-[#243029]" aria-label="LitePuff premium snacks hero">
-      <div className="absolute inset-0">
-        <img src={activeSlide.src} alt={activeSlide.title} className="absolute inset-0 h-full w-full object-cover object-[62%_center] sm:object-center" loading="eager" fetchPriority="high" decoding="async" onError={(event) => { event.currentTarget.src = heroFallback; }} />
-      </div>
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.65)_0%,rgba(0,0,0,0.40)_38%,rgba(0,0,0,0.08)_68%,transparent_100%)]" aria-hidden="true" />
-
-      <div className="home-hero-content relative z-10 mx-auto flex max-w-7xl items-center px-6 py-12 md:py-14 lg:px-10 lg:py-16">
-        <div className="hero-copy w-full max-w-[620px] text-center text-white md:text-left">
-          <motion.p className="font-sans text-[13px] font-semibold uppercase tracking-[0.35em] text-[#F2D58F]" initial="hidden" animate="visible" variants={fadeUp}>
-            Lighter. Smarter. Everyday.
-          </motion.p>
-
-          <motion.h1 className="mt-4 font-display text-[42px] font-semibold leading-[0.98] tracking-[-0.045em] text-white sm:text-[50px] md:text-[60px] lg:text-[66px] xl:text-[72px]" initial="hidden" animate="visible" variants={fadeUp}>
-            Healthy Snacking,<br />Without Compromise.
-          </motion.h1>
-
-          <motion.p className="mx-auto mt-5 max-w-[560px] text-[15px] leading-[1.75] text-white/90 sm:text-base md:mx-0 md:text-lg lg:mt-6" initial="hidden" animate="visible" variants={fadeUp}>
-            LitePuff brings together carefully selected ingredients, bold flavours and satisfying crunch to make everyday snacking lighter, healthier and more enjoyable.
-          </motion.p>
-
-          {/* Primary Actions */}
-          <motion.div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row md:justify-start" initial="hidden" animate="visible" variants={fadeUp}>
-            <Link to="/products" className="inline-flex h-[52px] items-center justify-center rounded-full bg-[#FAF8F2] px-8 text-base font-semibold text-[#1E4D3A] transition-colors duration-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F2D58F]">
-              Shop Now
-            </Link>
-            <Link to="/products#flavours" className="inline-flex h-[52px] items-center justify-center rounded-full border border-white/80 px-8 text-base font-semibold text-white transition-colors duration-300 hover:bg-white hover:text-[#1E4D3A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F2D58F]">
-              Explore Collection
-            </Link>
-          </motion.div>
-
-          <motion.div className="mx-auto mt-8 grid max-w-[600px] grid-cols-2 gap-x-3 gap-y-3 text-left sm:grid-cols-3 md:mx-0" initial="hidden" animate="visible" variants={staggeredBadges}>
-            {trustBadges.map((badge) => (
-              <motion.div key={badge} className="flex min-h-10 items-center gap-2 rounded-xl border border-white/35 bg-black/15 px-3 py-2 text-[12px] font-semibold text-white sm:text-[13px]" variants={fadeUp}>
-                <FiCheckCircle className="h-[17px] w-[17px] shrink-0 text-[#F2D58F]" strokeWidth={1.7} aria-hidden="true" />
-                <span>{badge}</span>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  );
+  const reduceMotion = useReducedMotion();
+  return <section className="home-hero relative isolate overflow-hidden bg-[#F3E8D3]" aria-label="LitePuff makhana collection">
+    <picture className="absolute inset-x-0 top-0 -z-10 block aspect-[1672/941] w-full md:inset-0 md:h-full md:aspect-auto">
+      <img src={productHero} alt="" width="1672" height="941" className="h-full w-full object-contain object-top md:object-cover md:object-center" fetchPriority="high" loading="eager" decoding="async" aria-hidden="true" />
+    </picture>
+    <div className="absolute inset-x-0 bottom-0 -z-[5] h-[62%] bg-gradient-to-t from-[#F3E8D3] via-[#F3E8D3]/95 to-transparent md:inset-y-0 md:left-0 md:right-auto md:h-full md:w-[58%] md:bg-gradient-to-r md:from-[#F3E8D3] md:via-[#F3E8D3]/90 md:to-transparent" aria-hidden="true" />
+    <div className="home-hero-content relative mx-auto flex min-h-[540px] max-w-[1440px] items-end pt-[55vw] md:min-h-[560px] md:items-center md:pt-0 lg:min-h-[620px]">
+      <motion.div className="hero-copy w-full min-w-0 px-5 pb-11 pt-8 text-center sm:px-8 md:max-w-[52%] md:px-10 md:py-12 md:text-left lg:pl-20 xl:pl-24" initial={reduceMotion ? false : { opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .55, ease: 'easeOut' }}>
+        <p className="font-sans text-[11px] font-bold uppercase tracking-[.22em] text-[#A97826] sm:text-xs sm:tracking-[.32em]">Lighter. Smarter. Everyday.</p>
+        <h1 className="mt-3 font-display text-[46px] font-semibold leading-[.92] tracking-[-.045em] text-[#243029] sm:text-[56px] lg:text-[72px]">Crunch Better.<br />Snack Lighter.</h1>
+        <p className="mx-auto mt-5 max-w-[420px] text-[15px] leading-7 text-[#5F6762] md:mx-0 md:text-base">Five bold flavours, one satisfying everyday crunch.</p>
+        <Link to="/products" className="group mt-7 inline-flex h-[52px] items-center justify-center gap-2 rounded-full bg-[#174F3D] px-8 text-base font-semibold text-white transition-colors hover:bg-[#28624F]">Shop Makhana <FiArrowRight className="transition-transform group-hover:translate-x-1" aria-hidden="true" /></Link>
+      </motion.div>
+    </div>
+  </section>;
 }

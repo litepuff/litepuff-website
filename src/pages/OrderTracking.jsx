@@ -12,6 +12,8 @@ import {
 import Seo from "../components/Seo.jsx";
 import { apiMessage, customerService } from "../services/customerService.js";
 import { formatMoney } from "../utils/formatMoney.js";
+import ComboProductImage from "../components/ComboProductImage.jsx";
+import { comboSize, groupOrderItems } from "../utils/orderItems.js";
 
 const stages = [
   "Pending",
@@ -174,13 +176,7 @@ export default function OrderTracking() {
 
                 <aside className="space-y-5">
                   <Card icon={FiPackage} title="Items">
-                    {order.items.map((item) => (
-                      <Row
-                        key={item.id}
-                        label={`${item.productName} × ${item.quantity}`}
-                        value={formatMoney(item.total)}
-                      />
-                    ))}
+                    {groupOrderItems(order.items).map((item) => item.comboProducts?.length ? <div key={item.id} className="grid gap-3 border-b border-[#EEE9DF] pb-4 last:border-0"><ComboProductImage selectedProducts={item.comboProducts} comboSize={comboSize(item)} className="h-28 w-full rounded-2xl" /><div><strong className="text-[#243029]">{item.comboName} · BUY {comboSize(item)}</strong><p>{item.productName}</p><strong className="text-[#243029]">{formatMoney(item.total)}</strong></div></div> : <Row key={item.id} label={`${item.productName} × ${item.quantity}`} value={formatMoney(item.total)} />)}
                   </Card>
                   <Card icon={FiMapPin} title="Shipping Address">
                     <p>{order.address?.FullName || order.address?.fullName}</p>

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { ok, created } from '../utils/apiResponse.js';
 import { getRows } from '../services/googleSheets.js';
-import { generateInvoice } from '../services/invoiceService.js';
+import { generateInvoice, getInvoiceData } from '../services/invoiceService.js';
 import { createShipment, fetchLiveTracking } from '../services/shippingService.js';
 import { csvReport, excelReport } from '../services/reportService.js';
 import { backupPath, createBackup, listBackups } from '../services/backupService.js';
@@ -12,13 +12,18 @@ function canAccessOrder(request, order) {
 }
 
 export async function downloadInvoice(request, response) {
-  const { filePath, fileName, order } = await generateInvoice(request.params.id);
-  if (!canAccessOrder(request, order)) return response.status(403).json({ success: false, message: 'You cannot access this invoice.' });
+  const invoiceData = await getInvoiceData(request.params.id);
+  if (!canAccessOrder(request, invoiceData.order)) return response.status(403).json({ success: false, message: 'You cannot access this invoice.' });
+  const { filePath, fileName } = await generateInvoice(request.params.id, invoiceData);
   response.download(filePath, fileName);
 }
 
 export function refundPlaceholder(request, response) {
-  ok(response, { status: 'manual_review' }, 'Refund request recorded for manual processing.');
+  response.status(501).json({
+    success: false,
+    code: 'REFUND_NOT_IMPLEMENTED',
+    message: 'Online refund initiation is not configured. Review the order and process any approved refund through the payment provider before updating its status.'
+  });
 }
 
 export async function getAdminPaymentController(request, response) {

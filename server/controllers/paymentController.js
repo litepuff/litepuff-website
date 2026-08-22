@@ -135,6 +135,8 @@ const schedulePostPaymentTasks = ({
 };
 
 function publicPayment(row) {
+  const method = String(row.PaymentMethod || '').trim().toLowerCase();
+  const gateway = row.Gateway || (method === 'cod' || method.includes('cash') ? 'Cash on Delivery' : 'Razorpay');
   return {
     id: row.PaymentID,
     paymentId: row.PaymentID,
@@ -146,7 +148,7 @@ function publicPayment(row) {
     currency: row.Currency,
     status: row.Status,
     paidAt: row.PaidAt,
-    gateway: row.Gateway || "Razorpay",
+    gateway,
     remarks: remarks(row.Remarks).message || "",
   };
 }
@@ -174,6 +176,7 @@ async function finalizePayment({
   razorpaySignature,
   gatewayPayment,
   correlationId,
+  allowExpiredCheckout = false,
 }) {
   return withPaymentLock(paymentId, async () => {
     logger.info("payment.finalization.started", {
@@ -186,7 +189,7 @@ async function finalizePayment({
       "PAYMENTS",
       (row) => row.PaymentID === paymentId,
     );
-    const snapshot = verifyCheckoutIntent(checkoutToken);
+    const snapshot = verifyCheckoutIntent(checkoutToken, { allowExpired: allowExpiredCheckout });
     if (
       !payment ||
       payment.CustomerID !== customerId ||
@@ -207,12 +210,42 @@ async function finalizePayment({
         "ORDERS",
         (row) => row.OrderID === payment.OrderID,
       );
-      await safelyQueuePurchase(
-        order.OrderID,
+      const itemCount = order
+        ? (await getRows("ORDER_ITEMS")).filter((row) => row.OrderID === order.OrderID).length
+        : 0;
+      if (!order || itemCount < snapshot.items.length) {
+        logger.warn("payment.finalization.incomplete_replay", {
+          correlationId,
+          paymentId,
+          orderId: payment.OrderID,
+          orderExists: Boolean(order),
+          itemCount,
+          expectedItemCount: snapshot.items.length,
+        });
+      } else {
+        await safelyQueuePurchase(
+          order.OrderID,
         remarks(payment.Remarks).metaAttribution || {},
         { correlationId, orderId: order.OrderID, paymentId: payment.PaymentID },
-      );
-      return { order, payment, replay: true };
+        );
+        const shipment = (await getRows("SHIPMENTS")).find((row) => row.OrderID === order.OrderID);
+        if (!shipment || ["failed", "retry pending"].includes(String(shipment.ShippingStatus || "").trim().toLowerCase())) {
+          const context = { correlationId, orderId: order.OrderID, paymentId: payment.PaymentID };
+          scheduleBackgroundTask("shipment.create", () => createShipment({
+            ...order,
+            shippingAddress: {
+              name: snapshot.address.fullName,
+              phone: snapshot.address.phone,
+              addressLine: [snapshot.address.addressLine1, snapshot.address.addressLine2, snapshot.address.landmark].filter(Boolean).join(", "),
+              city: snapshot.address.city,
+              state: snapshot.address.state,
+              pincode: snapshot.address.pincode,
+            },
+            items: snapshot.items,
+          }, preferredShippingProvider(), context), context);
+        }
+        return { order, payment, replay: true };
+      }
     }
     if (payment.RazorpayOrderID !== razorpayOrderId || snapshot.razorpayOrderId !== razorpayOrderId) {
       const error = new Error("Payment order mismatch.");
@@ -587,7 +620,7 @@ export async function paymentWebhook(request, response) {
       paymentId: payment.PaymentID,
     });
   }
-  if (event.event === "payment.captured" && payment.Status !== "Paid") {
+  if (event.event === "payment.captured") {
     const stored = remarks(payment.Remarks);
     await finalizePayment({
       paymentId: payment.PaymentID,
@@ -598,13 +631,7 @@ export async function paymentWebhook(request, response) {
       razorpaySignature: request.headers["x-razorpay-signature"],
       gatewayPayment: entity,
       correlationId: request.id,
-    });
-  } else if (event.event === "payment.captured") {
-    logger.info("razorpay.webhook.replay_ignored", {
-      ...webhookContext,
-      paymentId: payment.PaymentID,
-      orderId: payment.OrderID,
-      reason: "payment_already_paid",
+      allowExpiredCheckout: true,
     });
   }
   if (event.event === "payment.failed" && payment.Status !== "Paid") {

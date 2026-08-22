@@ -45,6 +45,7 @@ import { adminCancelShipment, adminCreateShipment, adminRecoverShipments, adminT
 import { PERMISSIONS } from '../config/auth.js';
 import adminWhatsAppRoutes from './adminWhatsAppRoutes.js';
 import { deleteAdminProductReview, getAdminProductReviews, moderateProductReview, replyToReview } from '../controllers/productReviewController.js';
+import { createAdminBackup, exportAdminReport, getAdminBackups } from '../controllers/adminOperationsController.js';
 
 const router = express.Router();
 const handle = (controller) => (request, response, next) => Promise.resolve(controller(request, response, next)).catch(next);
@@ -104,5 +105,9 @@ router.delete('/contact/:id', requirePermission(PERMISSIONS.ADMIN_CONTACT_MANAGE
 router.get('/newsletter/export', requirePermission(PERMISSIONS.ADMIN_NEWSLETTER_MANAGE), handle(exportAdminNewsletter));
 router.get('/newsletter', requirePermission(PERMISSIONS.ADMIN_NEWSLETTER_MANAGE), handle(getAdminNewsletter));
 router.delete('/newsletter/:id', requirePermission(PERMISSIONS.ADMIN_NEWSLETTER_MANAGE), handle(deleteAdminNewsletterSubscriber));
+
+router.get('/reports/:type', requirePermission(PERMISSIONS.ADMIN_REPORTS_VIEW), handle(exportAdminReport));
+router.post('/backups', requirePermission(PERMISSIONS.ADMIN_SETTINGS_MANAGE), activityLogger('Backup Created', 'Settings'), handle(createAdminBackup));
+router.get('/backups', requirePermission(PERMISSIONS.ADMIN_SETTINGS_MANAGE), handle(getAdminBackups));
 
 export default router;

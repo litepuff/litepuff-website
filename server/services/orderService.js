@@ -233,8 +233,8 @@ export function signCheckoutIntent(snapshot, razorpayOrderId) {
   );
 }
 
-export function verifyCheckoutIntent(token) {
-  const payload = jwt.verify(token, intentSecret());
+export function verifyCheckoutIntent(token, { allowExpired = false } = {}) {
+  const payload = jwt.verify(token, intentSecret(), { ignoreExpiration: allowExpired });
   if (payload.type !== "checkout_intent")
     throw httpError("Invalid checkout session.", 401);
   return payload;
@@ -282,17 +282,16 @@ async function materializeOrderUnlocked({
 }) {
   const orderId = `order-${payment.PaymentID}`;
   let order = (await getRows("ORDERS")).find((row) => row.OrderID === orderId);
-  const revalidated = order
-    ? snapshot
-    : await buildCheckoutIntent({
-        customerId: snapshot.customerId,
-        address: snapshot.address,
-        items: snapshot.requestedItems || snapshot.items,
-        couponCode: snapshot.couponCode,
-        paymentId: snapshot.paymentId,
-        paymentMethod: snapshot.paymentMethod || (paymentMethod === "Cash on Delivery" ? "cod" : "online"),
-      });
+  // The signed checkout intent is the historical, server-authored price and
+  // item snapshot. Re-pricing a captured payment against today's catalog can
+  // strand a valid payment after an offer/product change. Stock is still
+  // checked immediately before the exactly-once inventory mutation below.
+  const revalidated = snapshot;
   if (
+    snapshot.paymentId !== payment.PaymentID ||
+    snapshot.customerId !== payment.CustomerID ||
+    !Array.isArray(revalidated.items) ||
+    !revalidated.items.length ||
     Number(revalidated.grandTotal) !== Number(payment.Amount) ||
     revalidated.currency !== payment.Currency
   )

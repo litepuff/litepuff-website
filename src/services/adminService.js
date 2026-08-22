@@ -45,18 +45,12 @@ export const adminService = {
     return response.data;
   },
   createShipment: async (orderId) => unwrap(await apiClient.post(`/admin/orders/${orderId}/shipment`, {})),
-  requestRefund: async (orderId) => unwrap(await apiClient.post(`/admin/payments/${orderId}/refund`)),
-  payment: async (id) => unwrap(await apiClient.get(`/admin/payments/${id}`)),
   exportReport: async (type, params = {}) => {
     const response = await apiClient.get(`/admin/reports/${type}`, { params, responseType: 'blob' });
     return response.data;
   },
   createBackup: async () => unwrap(await apiClient.post('/admin/backups')),
   backups: async () => unwrap(await apiClient.get('/admin/backups')),
-  downloadBackup: async (fileName) => {
-    const response = await apiClient.get(`/admin/backups/${fileName}`, { responseType: 'blob' });
-    return response.data;
-  },
   downloadInvoice: async (orderId) => {
     const response = await apiClient.get(`/orders/${orderId}/invoice`, { responseType: 'blob' });
     return response.data;

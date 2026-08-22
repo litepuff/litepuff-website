@@ -1,0 +1,9 @@
+import { FiArrowRight } from 'react-icons/fi';
+import { Link } from 'react-router-dom';
+import productHero from '../assets/images/hero/product-hero.png';
+
+const openBuilder = () => window.dispatchEvent(new CustomEvent('litepuff:open-combo', { detail: { comboType: 'COMBO_2' } }));
+
+export default function FinalShopCta() {
+  return <section className="overflow-hidden bg-white px-5 py-16 sm:px-6 md:py-24 lg:px-10" aria-labelledby="final-shop-title"><div className="mx-auto grid max-w-7xl overflow-hidden rounded-[28px] bg-[#1E4D3A] text-white md:grid-cols-[.82fr_1.18fr]"><div className="flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-14"><p className="text-xs font-bold uppercase tracking-[.25em] text-[#E8C66E]">Ready to Snack?</p><h2 id="final-shop-title" className="mt-4 font-display text-[42px] font-semibold leading-[.96] tracking-[-.03em] sm:text-5xl">Your next favourite snack is waiting.</h2><p className="mt-4 max-w-md text-sm leading-7 text-white/72">Pick your flavour. Build your combo. Make snack time LitePuff.</p><div className="mt-7 flex flex-col gap-3 sm:flex-row"><Link to="/products" className="group inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#FAF8F2] px-6 text-sm font-bold text-[#1E4D3A]">Shop All Flavours <FiArrowRight className="transition-transform group-hover:translate-x-1" /></Link><button type="button" onClick={openBuilder} className="inline-flex h-12 items-center justify-center rounded-full border border-white/45 px-6 text-sm font-bold text-white transition hover:bg-white hover:text-[#1E4D3A]">Build Your Combo</button></div></div><div className="relative min-h-[300px] overflow-hidden bg-[#EFE5D2] md:min-h-[480px]"><img src={productHero} alt="LitePuff makhana flavour collection" className="absolute inset-0 h-full w-full scale-110 object-cover object-center" loading="lazy" decoding="async" /></div></div></section>;
+}

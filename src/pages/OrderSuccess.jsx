@@ -12,6 +12,8 @@ import {
 import Seo from "../components/Seo.jsx";
 import { apiMessage, customerService } from "../services/customerService.js";
 import { formatMoney } from "../utils/formatMoney.js";
+import ComboProductImage from "../components/ComboProductImage.jsx";
+import { comboSize, groupOrderItems } from "../utils/orderItems.js";
 
 export default function OrderSuccess() {
   const { orderId } = useParams();
@@ -121,13 +123,14 @@ export default function OrderSuccess() {
                     Items Ordered
                   </h2>
                   <div className="mt-4 divide-y divide-[#EEE9DF]">
-                    {order.items.map((item) => (
+                    {groupOrderItems(order.items).map((item) => (
                       <div
                         key={item.id}
-                        className="flex justify-between gap-4 py-4 text-sm"
+                        className="grid gap-3 py-4 text-sm sm:grid-cols-[112px_1fr_auto] sm:items-center"
                       >
+                        {item.comboProducts?.length ? <ComboProductImage selectedProducts={item.comboProducts} comboSize={comboSize(item)} className="h-24 w-28 rounded-2xl" /> : <span className="hidden sm:block" />}
                         <span>
-                          {item.comboName ? `${item.comboName}: ` : ''}{item.productName} × {item.quantity}
+                          {item.comboName ? `${item.comboName} · BUY ${comboSize(item)}: ` : ''}{item.productName}{item.comboProducts?.length ? '' : ` × ${item.quantity}`}
                         </span>
                         <strong>{formatMoney(item.total)}</strong>
                       </div>

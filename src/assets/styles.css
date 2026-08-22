@@ -18,7 +18,7 @@
 
 :root {
   --announcement-height: 0px;
-  --festival-banner-height: 78px;
+  --festival-banner-height: 44px;
   --navbar-height: 72px;
   --color-primary: 30 77 58;
   --color-secondary: 200 155 60;
@@ -31,7 +31,7 @@
 }
 
 @media (min-width: 768px) {
-  :root { --navbar-height: 76px; --festival-banner-height: 64px; }
+  :root { --navbar-height: 76px; --festival-banner-height: 44px; }
 }
 
 @media (min-width: 1024px) {
@@ -61,19 +61,9 @@
   pointer-events: none;
 }
 
-.festival-sale-bar::before {
-  inset: 0 0 auto;
-  height: 7px;
-  opacity: .72;
-  background: repeating-linear-gradient(135deg, transparent 0 17px, #d69b3c 17px 25px, transparent 25px 35px);
-}
+.festival-sale-bar::before { inset: 0 0 auto; height: 1px; background: rgba(232,198,110,.55); }
 
-.festival-sale-bar::after {
-  inset: auto 0 5px;
-  height: 4px;
-  opacity: .45;
-  background: radial-gradient(circle, #e8c66e 1.5px, transparent 2px) 0 0 / 24px 4px repeat-x;
-}
+.festival-sale-bar::after { inset: auto 0 0; height: 1px; background: rgba(232,198,110,.35); }
 
 .festival-ticker-track,
 .festival-ticker-group {
@@ -102,7 +92,7 @@
   font-size: .79rem;
 }
 
-.festival-ticker-item + .festival-ticker-item { border-left: 1px solid rgba(232,198,110,.3); }
+.festival-ticker-item::after { content: '✦'; margin-left: 3.5rem; color: #e8c66e; font-size: .55rem; }
 
 @keyframes festival-ticker { to { transform: translateX(-50%); } }
 
@@ -157,14 +147,15 @@
   background: #1e4d3a;
 }
 
-.home-hero,
-.home-hero-content {
-  min-height: calc(100svh - var(--announcement-height, 0px) - var(--navbar-height));
+.home-hero-content { min-height: min(760px, calc(100svh - var(--announcement-height, 0px) - var(--navbar-height))); }
+
+@media (max-width: 767px) {
+  .home-hero-content { min-height: 0; }
 }
 
 .hero-copy h1,
 .hero-copy p {
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.34);
+  text-shadow: none;
 }
 
 

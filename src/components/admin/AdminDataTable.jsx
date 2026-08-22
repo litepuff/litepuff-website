@@ -23,16 +23,16 @@ export default function AdminDataTable({ title, description, columns, rows, load
   }
 
   return (
-    <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="rounded-[24px] border border-brand-border bg-white shadow-sm">
+    <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="max-w-full overflow-hidden rounded-2xl border border-brand-border bg-white shadow-sm">
       <div className="flex flex-col gap-4 border-b border-brand-border p-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="font-display text-2xl font-black text-brand-text">{title}</h2>
+          <h2 className="font-display text-2xl font-semibold text-brand-text">{title}</h2>
           {description ? <p className="mt-1 text-sm text-brand-muted">{description}</p> : null}
         </div>
-        <input value={query} onChange={(event) => handleQueryChange(event.target.value)} placeholder={searchPlaceholder} className="w-full rounded-2xl border border-brand-border bg-brand-background px-4 py-3 text-sm outline-none transition focus:border-brand-primary lg:max-w-xs" />
+        <input value={query} onChange={(event) => handleQueryChange(event.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder} className="w-full rounded-xl border border-brand-border bg-brand-background px-4 py-3 text-sm outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/15 lg:max-w-xs" />
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="max-w-full overflow-x-auto overscroll-x-contain">
         <table className="min-w-full text-left text-sm">
           <thead className="sticky top-0 bg-brand-background text-xs uppercase tracking-[0.18em] text-brand-muted">
             <tr>
@@ -59,7 +59,7 @@ export default function AdminDataTable({ title, description, columns, rows, load
 
       {!loading && !visibleRows.length ? <div className="p-8 text-center text-brand-muted">{emptyText}</div> : null}
 
-      <div className="flex items-center justify-between border-t border-brand-border p-5 text-sm text-brand-muted">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-border p-4 text-sm text-brand-muted sm:p-5">
         <span>{visibleRows.length} records</span>
         <div className="flex items-center gap-2">
           <button disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-full border border-brand-border px-3 py-1 disabled:opacity-40">Prev</button>

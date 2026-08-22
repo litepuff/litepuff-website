@@ -17,25 +17,13 @@ import { logger } from "../utils/logger.js";
 import { productPricing } from "../utils/productPricing.js";
 import { adminSheetsService } from "../services/AdminSheetsService.js";
 import { getOfferConfig, saveOfferConfig } from "../services/offerService.js";
+import { ORDER_STATUSES, allowedOrderTransitions, canTransitionOrder } from '../domain/orderStatusTransitions.js';
 
 const now = () => new Date().toISOString();
 const money = (value) => Number(Number(value || 0).toFixed(2));
 const bool = (value) =>
   value === true || String(value).toLowerCase() === "true";
 const text = (value) => String(value || "").trim();
-const ORDER_STATUSES = [
-  "Pending",
-  "Confirmed",
-  "Packed",
-  "Ready for Dispatch",
-  "Shipped",
-  "Out for Delivery",
-  "Delivered",
-  "Cancelled",
-  "Returned",
-  "Refunded",
-];
-
 const adminRole = (role) => {
   const normalized = text(role).toLowerCase().replaceAll(" ", "_");
   if (normalized === "owner") return "super_admin";
@@ -131,6 +119,7 @@ const orderDto = (row, customer = null, items = [], payment = null, shipment = n
   paymentDate: payment?.PaidAt || "",
   status: row.OrderStatus,
   orderStatus: row.OrderStatus,
+  allowedTransitions: allowedOrderTransitions(row.OrderStatus),
   trackingNumber: row.TrackingNumber,
   shippingProvider: shipment?.Provider || row.ShippingProvider,
   awbNumber: shipment?.AWBNumber || row.AWBNumber,
@@ -240,6 +229,7 @@ export async function getAdminDashboard(request, response) {
     messages,
     orderItems,
     payments,
+    shipments,
   ] = await Promise.all([
     getRows("ORDERS"),
     getRows("PRODUCTS"),
@@ -249,6 +239,7 @@ export async function getAdminDashboard(request, response) {
     getRows("CONTACT_MESSAGES"),
     getRows("ORDER_ITEMS"),
     getRows("PAYMENTS"),
+    getRows("SHIPMENTS"),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -267,11 +258,17 @@ export async function getAdminDashboard(request, response) {
   const todaysOrders = orders.filter((order) =>
     String(order.CreatedAt).startsWith(today),
   );
-  const revenue = orders.reduce(
+  const paidOrderIds = new Set(paidPayments.map((payment) => text(payment.OrderID)));
+  const revenueOrders = orders.filter((order) => {
+    const method = text(order.PaymentMethod).toLowerCase();
+    return paidOrderIds.has(text(order.OrderID)) ||
+      ((method === "cod" || method.includes("cash")) && text(order.OrderStatus).toLowerCase() === "delivered");
+  });
+  const revenue = revenueOrders.reduce(
     (sum, order) => sum + Number(order.GrandTotal || 0),
     0,
   );
-  const todaysRevenue = orders
+  const todaysRevenue = revenueOrders
     .filter((order) => String(order.CreatedAt).startsWith(today))
     .reduce((sum, order) => sum + Number(order.GrandTotal || 0), 0);
   const deliveredOrders = orders.filter(
@@ -289,7 +286,7 @@ export async function getAdminDashboard(request, response) {
     : 0;
 
   const monthMap = new Map();
-  orders.forEach((order) => {
+  revenueOrders.forEach((order) => {
     const key =
       String(order.CreatedAt || order.UpdatedAt || "").slice(0, 7) ||
       "Un dated";
@@ -306,7 +303,8 @@ export async function getAdminDashboard(request, response) {
   });
 
   const productSales = new Map();
-  orderItems.forEach((item) => {
+  const revenueOrderIds = new Set(revenueOrders.map((order) => text(order.OrderID)));
+  orderItems.filter((item) => revenueOrderIds.has(text(item.OrderID))).forEach((item) => {
     const current = productSales.get(item.ProductID) || {
       productId: item.ProductID,
       name: item.ProductName,
@@ -330,6 +328,18 @@ export async function getAdminDashboard(request, response) {
       pendingPayments: payments.filter(
         (payment) => payment.Status === "Pending",
       ).length,
+      codOrders: orders.filter((order) =>
+        ["cod", "cash on delivery"].includes(text(order.PaymentMethod).toLowerCase()),
+      ).length,
+      pendingShipments: shipments.filter((shipment) =>
+        !["delivered", "cancelled", "rto delivered"].includes(
+          text(shipment.Status || shipment.ShipmentStatus).toLowerCase(),
+        ),
+      ).length,
+      lowStockProducts: products.filter((product) =>
+        text(product.Stock) !== "" && text(product.Status).toLowerCase() !== "inactive" &&
+        Number(product.Stock || 0) <= 10,
+      ).length,
       totalOrders: orders.length,
       pendingOrders: pendingOrders.length,
       deliveredOrders: deliveredOrders.length,
@@ -342,7 +352,7 @@ export async function getAdminDashboard(request, response) {
         (row) => String(row.Status).toLowerCase() !== "deleted",
       ).length,
       averageRating: Number(averageRating.toFixed(1)),
-      averageOrderValue: orders.length ? money(revenue / orders.length) : 0,
+      averageOrderValue: revenueOrders.length ? money(revenue / revenueOrders.length) : 0,
     },
     charts: {
       revenueByMonth: [...monthMap.values()]
@@ -602,6 +612,14 @@ export async function updateAdminOrderStatus(request, response) {
     return response
       .status(422)
       .json({ success: false, message: "Invalid order status." });
+  if (!canTransitionOrder(row.OrderStatus, request.body.status)) {
+    return response.status(409).json({
+      success: false,
+      code: 'INVALID_ORDER_STATUS_TRANSITION',
+      message: `Order cannot move from ${row.OrderStatus} to ${request.body.status}.`,
+      allowedTransitions: allowedOrderTransitions(row.OrderStatus),
+    });
+  }
   row.OrderStatus = request.body.status;
   if (request.body.paymentStatus)
     row.PaymentStatus = request.body.paymentStatus;

@@ -34,7 +34,7 @@ function WriteReview({ open, close, submit, busy }) {
       <label className="mt-4 block text-sm font-semibold">Your review<textarea required minLength="10" maxLength="3000" value={form.review} onChange={(event) => set('review', event.target.value)} className="mt-2 min-h-32 w-full resize-y rounded-xl border border-[#DCD4C7] p-4 font-normal" /></label>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <label className="flex min-h-20 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#BEB6A8] p-4 text-sm"><FiUpload />{images.length ? `${images.length} image(s)` : 'Up to 5 images'}<input className="sr-only" type="file" accept=".jpg,.jpeg,.png,.webp" multiple onChange={(event) => setImages([...event.target.files].slice(0, 5))} /></label>
-        <label className="flex min-h-20 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#BEB6A8] p-4 text-sm"><FiUpload />{video ? video.name : 'One MP4 (max 60 sec)'}<input className="sr-only" type="file" accept="video/mp4" onChange={(event) => setVideo(event.target.files[0] || null)} /></label>
+        <label className="flex min-h-20 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#BEB6A8] p-4 text-sm"><FiUpload />{video ? video.name : 'One MP4 (up to 25 MB)'}<input className="sr-only" type="file" accept="video/mp4" onChange={(event) => setVideo(event.target.files[0] || null)} /></label>
       </div>
       <button disabled={busy || !form.rating || attributes.some(([key]) => !form[key])} className="mt-6 h-12 w-full rounded-full bg-[#1E4D3A] text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Submitting…' : 'Submit Review'}</button>
     </motion.form>
@@ -72,9 +72,8 @@ export default function ProductReviews({ product, onSummary }) {
   useEffect(() => { load(); }, [load]); useEffect(() => { loadSummary(); }, [loadSummary]);
   useEffect(() => {
     const refresh = () => { if (!document.hidden) { load(); loadSummary(); } };
-    const interval = window.setInterval(refresh, 30_000);
     window.addEventListener('focus', refresh);
-    return () => { window.clearInterval(interval); window.removeEventListener('focus', refresh); };
+    return () => window.removeEventListener('focus', refresh);
   }, [load, loadSummary]);
   const change = (next) => setQuery((current) => ({ ...current, page: 1, ...next }));
   const signedIn = () => { if (customer) return true; showToast('Please sign in to continue.', 'info'); navigate('/login'); return false; };

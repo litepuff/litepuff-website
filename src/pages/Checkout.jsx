@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -22,6 +22,8 @@ import { contentService } from "../services/contentService.js";
 import useMetaTracking from "../analytics/useMetaTracking.js";
 import { getMetaAttribution } from "../analytics/metaPixel.js";
 import { isMetaTrackingAttemptSuccessful } from "../analytics/metaEvents.js";
+import ComboProductImage from "../components/ComboProductImage.jsx";
+import { checkoutCartItems } from "../utils/comboCart.js";
 
 const paymentMethods = [
   {
@@ -86,6 +88,9 @@ function Field({
   required = true,
   className = "",
   placeholder = "",
+  error,
+  inputMode,
+  maxLength,
 }) {
   return (
     <label className={`block ${className}`}>
@@ -98,8 +103,13 @@ function Field({
         onChange={onChange}
         required={required}
         placeholder={placeholder}
-        className={fieldClass}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${name}-error` : undefined}
+        className={`${fieldClass} ${error ? 'border-[#B84A3A] focus:border-[#B84A3A] focus:ring-[#B84A3A]/10' : ''}`}
       />
+      {error && <span id={`${name}-error`} role="alert" className="mt-1.5 block text-xs font-semibold text-[#A43D32]">{error}</span>}
     </label>
   );
 }
@@ -142,6 +152,8 @@ export default function Checkout() {
     country: "India",
   });
   const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [savedAddresses, setSavedAddresses] = useState([]);
   const initialCoupon = useRef(storedCoupon()).current;
   const [coupon, setCoupon] = useState(initialCoupon?.code || "");
   const [appliedCoupon, setAppliedCoupon] = useState(initialCoupon);
@@ -158,14 +170,44 @@ export default function Checkout() {
   const [serverPricing, setServerPricing] = useState(null);
   const totals = serverPricing || estimatedTotals;
 
-  const onAddressChange = (event) =>
+  useEffect(() => {
+    if (!customer) return undefined;
+    let active = true;
+    customerService.addresses().then((result) => { if (active) setSavedAddresses(result.addresses || []); }).catch(() => {});
+    return () => { active = false; };
+  }, [customer]);
+
+  const onAddressChange = (event) => {
     setAddress((current) => ({
       ...current,
       [event.target.name]: event.target.value,
     }));
+    setFieldErrors((current) => ({ ...current, [event.target.name]: '' }));
+  };
+
+  const useSavedAddress = (saved) => {
+    setAddress((current) => ({ ...current, fullName: saved.name || current.fullName, phone: saved.phone || current.phone, addressLine1: saved.addressLine || '', addressLine2: '', city: saved.city || '', state: saved.state || '', pincode: saved.pincode || '', country: 'India' }));
+    setFieldErrors({});
+  };
+
+  const validateCheckout = () => {
+    const next = {};
+    if (!address.fullName.trim()) next.fullName = 'Enter the full name for this delivery.';
+    if (!/^[6-9]\d{9}$/.test(address.phone.replace(/\D/g, '').slice(-10))) next.phone = 'Enter a valid 10-digit Indian mobile number.';
+    if (!address.addressLine1.trim()) next.addressLine1 = 'Enter a house, flat, building, or street address.';
+    if (!address.city.trim()) next.city = 'Enter the delivery city.';
+    if (!address.state.trim()) next.state = 'Enter the delivery state.';
+    if (!/^\d{6}$/.test(address.pincode.trim())) next.pincode = 'Enter a valid 6-digit Indian pincode.';
+    if (!paymentMethod) next.paymentMethod = 'Select a payment method.';
+    setFieldErrors(next);
+    const first = Object.keys(next)[0];
+    if (first) window.setTimeout(() => document.querySelector(`[name="${first}"]`)?.focus(), 0);
+    return !first;
+  };
 
   const selectPaymentMethod = (method) => {
     setPaymentMethod(method);
+    setFieldErrors((current) => ({ ...current, paymentMethod: '' }));
     setServerPricing(null);
     if (method === "cod") {
       setAppliedCoupon(null);
@@ -207,6 +249,7 @@ export default function Checkout() {
       setError("Your cart is empty.");
       return;
     }
+    if (!validateCheckout()) return;
 
     if (!paymentInfoTrackedRef.current) {
       try {
@@ -228,10 +271,7 @@ export default function Checkout() {
         paymentMethod,
         coupon: paymentMethod === "cod" ? "" : appliedCoupon?.code || "",
         notes,
-        items: cartItems.map((item) => item.type === 'combo' ? {
-          type: 'combo', comboType: item.comboType, comboId: item.id,
-          items: item.items.map((selection) => ({ productId: selection.productId || selection.id, quantity: selection.quantity })),
-        } : { productId: item.id, quantity: item.quantity }),
+        items: checkoutCartItems(cartItems),
         metaAttribution: getMetaAttribution(),
         checkoutRequestId: checkoutRequestId.current,
       };
@@ -483,18 +523,24 @@ export default function Checkout() {
                     </h2>
                   </div>
                 </div>
+                {customer?.email && <div className="mt-6 rounded-2xl border border-[#E7E1D6] bg-[#FAF8F2] px-4 py-3"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#A97826]">Contact information</p><p className="mt-1 text-sm font-semibold text-[#243029]">{customer.email}</p></div>}
+                {savedAddresses.length > 0 && <div className="mt-6"><p className="text-xs font-bold uppercase tracking-[.18em] text-[#747C77]">Saved addresses</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{savedAddresses.map((saved) => <button key={saved.id} type="button" onClick={() => useSavedAddress(saved)} className="rounded-2xl border border-[#E3DED3] bg-[#FAF8F2] p-4 text-left text-sm transition hover:border-[#1E4D3A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1E4D3A]"><strong className="block text-[#243029]">{saved.name}</strong><span className="mt-1 block leading-5 text-[#68706B]">{saved.addressLine}<br />{saved.city}, {saved.state} {saved.pincode}</span><span className="mt-3 block text-xs font-bold text-[#1E4D3A]">Use this address →</span></button>)}</div></div>}
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
                   <Field
                     label="Full Name"
                     name="fullName"
                     value={address.fullName}
                     onChange={onAddressChange}
+                    error={fieldErrors.fullName}
                   />
                   <Field
                     label="Phone"
                     name="phone"
                     value={address.phone}
                     onChange={onAddressChange}
+                    inputMode="tel"
+                    maxLength={10}
+                    error={fieldErrors.phone}
                   />
                   <Field
                     label="Address Line 1"
@@ -502,6 +548,7 @@ export default function Checkout() {
                     value={address.addressLine1}
                     onChange={onAddressChange}
                     className="md:col-span-2"
+                    error={fieldErrors.addressLine1}
                   />
                   <Field
                     label="Address Line 2"
@@ -516,18 +563,23 @@ export default function Checkout() {
                     name="city"
                     value={address.city}
                     onChange={onAddressChange}
+                    error={fieldErrors.city}
                   />
                   <Field
                     label="State"
                     name="state"
                     value={address.state}
                     onChange={onAddressChange}
+                    error={fieldErrors.state}
                   />
                   <Field
                     label="Pincode"
                     name="pincode"
                     value={address.pincode}
                     onChange={onAddressChange}
+                    inputMode="numeric"
+                    maxLength={6}
+                    error={fieldErrors.pincode}
                   />
                   <Field
                     label="Country"
@@ -580,6 +632,7 @@ export default function Checkout() {
                     </button>
                   ))}
                 </div>
+                {fieldErrors.paymentMethod && <p role="alert" className="mt-3 text-xs font-semibold text-[#A43D32]">{fieldErrors.paymentMethod}</p>}
               </motion.section>
 
               <section className="rounded-[24px] border border-[#E4DED3] bg-white p-5 shadow-soft" aria-labelledby="delivery-partners-title">
@@ -622,10 +675,12 @@ export default function Checkout() {
                 {cartItems.map((item) => (
                   <div
                     key={item.id}
-                    className="flex justify-between gap-4 text-sm"
+                    className="grid grid-cols-[64px_1fr_auto] gap-3 border-b border-[#ECE7DD] pb-4 text-sm last:border-0"
                   >
+                    <div className="h-16 w-16 overflow-hidden rounded-xl bg-[#F6F0E5]">{item.type === 'combo' ? <ComboProductImage selectedProducts={item.items} comboSize={item.items.reduce((sum, part) => sum + Number(part.quantity || 1), 0)} className="h-full w-full" /> : <img src={item.image || item.images?.[0]} alt="" className="h-full w-full object-contain" />}</div>
                     <span>
                       {item.name} × {item.quantity}
+                      {item.type === 'combo' && <><small className="mt-1 block font-bold uppercase tracking-[.12em] text-[#1E4D3A]">BUY {item.items.reduce((sum, part) => sum + Number(part.quantity || 1), 0)}</small><small className="mt-1 block leading-5 text-[#6B726D]">{item.items.map((part) => `${part.name || part.productName}${Number(part.quantity) > 1 ? ` × ${part.quantity}` : ''}`).join(' · ')}</small></>}
                     </span>
                     <strong>{formatMoney(item.price * item.quantity)}</strong>
                   </div>

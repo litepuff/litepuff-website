@@ -37,12 +37,16 @@ export async function getInvoiceData(orderId) {
   };
 }
 
-export async function generateInvoice(orderId) {
-  const { order, items, customer, address, payment } = await getInvoiceData(orderId);
+export async function generateInvoice(orderId, existingData = null) {
+  const { order, items, customer, address, payment } = existingData || await getInvoiceData(orderId);
   const fileName = `invoice-${order.OrderNumber || order.OrderID}.pdf`;
   const filePath = path.join(invoiceDir, fileName);
 
-  if (fs.existsSync(filePath)) return { filePath, fileName, order };
+  const sourceUpdatedAt = Math.max(
+    Date.parse(order.UpdatedAt || order.CreatedAt || 0) || 0,
+    Date.parse(payment.UpdatedAt || payment.PaidAt || payment.CreatedAt || 0) || 0,
+  );
+  if (fs.existsSync(filePath) && fs.statSync(filePath).mtimeMs >= sourceUpdatedAt) return { filePath, fileName, order };
 
   await new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 48, size: 'A4' });
@@ -52,7 +56,7 @@ export async function generateInvoice(orderId) {
     if (fs.existsSync(logoPath)) doc.image(logoPath, 48, 38, { fit: [92, 54] });
     doc.fontSize(24).fillColor('#1E4D3A').text('LitePuff', 155, 48, { continued: true }).fontSize(10).fillColor('#53635c').text('  Premium roasted snacks');
     doc.moveDown();
-    doc.fontSize(18).fillColor('#0f2b21').text('Tax Invoice');
+    doc.fontSize(18).fillColor('#0f2b21').text(env.gstNumber ? 'Tax Invoice' : 'Invoice');
     doc.fontSize(10).fillColor('#53635c').text(`Invoice Number: INV-${order.OrderNumber || order.OrderID}`);
     doc.text(`Order Number: ${order.OrderNumber}`);
     doc.text(`Internal Tracking ID: ${order.TrackingNumber}`);
@@ -75,7 +79,11 @@ export async function generateInvoice(orderId) {
     doc.fillColor('#0f2b21').fontSize(12).text('Products');
     doc.moveDown(0.4);
     items.forEach((item) => {
-      doc.fillColor('#53635c').fontSize(10).text(`${item.ProductName}  x ${item.Quantity}`, { continued: true }).text(rupee(item.Total), { align: 'right' });
+      const combo = String(item.LineType || '').toLowerCase() === 'combo';
+      const prefix = combo ? `${item.ComboName || 'LitePuff Custom Combo'} (${item.ComboType || ''}) — ` : '';
+      const sku = item.SKU || item.ProductID || 'N/A';
+      doc.fillColor('#53635c').fontSize(10).text(`${prefix}${item.ProductName}  × ${item.Quantity}`, { continued: true }).text(rupee(item.Total), { align: 'right' });
+      doc.fontSize(8).fillColor('#78847e').text(`SKU: ${sku} · Unit price: ${rupee(item.Price)}`);
     });
     doc.moveDown();
     [['MRP', order.Subtotal], ...(Number(order.CouponDiscount || 0) ? [['Coupon Discount', -Number(order.CouponDiscount)]] : []), [String(order.PaymentMethod || '').toLowerCase().includes('cash') ? 'Shipping Included' : 'Shipping', order.Shipping], ['Tax Included', order.Tax], ['Grand Total', order.GrandTotal]].forEach(([label, value]) => {
@@ -85,8 +93,9 @@ export async function generateInvoice(orderId) {
     doc.fillColor('#53635c').fontSize(10).text(`Payment Method: ${order.PaymentMethod || payment.PaymentMethod}`);
     doc.text(`Payment Status: ${order.PaymentStatus || payment.Status}`);
     doc.text(`Transaction ID: ${payment.TransactionReference || payment.RazorpayPaymentID || 'N/A'}`);
-    doc.text(`Gateway: ${payment.Gateway || 'Razorpay'}`);
-    doc.text(`Status: ${payment.Status || order.PaymentStatus || 'Paid'}`);
+    const cod = ['cod', 'cash on delivery'].includes(String(order.PaymentMethod || payment.PaymentMethod || '').toLowerCase());
+    doc.text(`Gateway: ${payment.Gateway || (cod ? 'Cash on Delivery' : 'Razorpay')}`);
+    doc.text(`Status: ${payment.Status || order.PaymentStatus || 'Pending'}`);
     doc.moveDown();
     doc.fillColor('#1E4D3A').fontSize(12).text('Thank you for choosing LitePuff.');
     doc.fillColor('#53635c').fontSize(9).text('This is a computer-generated invoice.');

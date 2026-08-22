@@ -1,12 +1,16 @@
 // src/pages/Home.jsx
 
 import Hero from "../components/Hero";
-import FeaturedFlavours from "../components/FeaturedFlavours";
 import SignatureCollection from "../components/SignatureCollection";
 import WhyLitePuff from "../components/WhyLitePuff";
 import CustomersReviews from "../components/CustomerReviews";
-import LitePuffStory from "../components/LitePuffRitual";
-import StayConnected from "../components/StayConnected";
+import ProductVideo from "../components/ProductVideo";
+import ShopPlatforms from "../components/ShopPlatforms";
+import FinalShopCta from "../components/FinalShopCta";
+import HomeStory from "../components/HomeStory";
+import BrandPromise from "../components/BrandPromise";
+import HomeFAQ from "../components/HomeFAQ";
+import TrustStrip from "../components/TrustStrip";
 import Seo from "../components/Seo";
 import CampaignBanner from "../components/storefront/CampaignBanner.jsx";
 const Home = () => {
@@ -17,11 +21,15 @@ const Home = () => {
       <Hero />
       <CampaignBanner />
       <SignatureCollection />
-      <FeaturedFlavours />
+      <HomeStory />
+      <ProductVideo />
       <WhyLitePuff />
-      <LitePuffStory />
       <CustomersReviews />
-      <StayConnected />
+      <ShopPlatforms />
+      <BrandPromise />
+      <HomeFAQ />
+      <FinalShopCta />
+      <TrustStrip />
     </>
   );
 };

@@ -6,19 +6,6 @@ import { formatMoney } from "../../utils/formatMoney";
 import { PageTitle } from "./AdminProductsPage.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 
-const statuses = [
-  "Pending",
-  "Confirmed",
-  "Packed",
-  "Ready for Dispatch",
-  "Shipped",
-  "Out for Delivery",
-  "Delivered",
-  "Cancelled",
-  "Returned",
-  "Refunded",
-];
-
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,7 +100,7 @@ export default function AdminOrdersPage() {
               onChange={(event) => updateStatus(row, event.target.value)}
               className="rounded-xl border border-brand-border px-3 py-2 text-xs font-bold"
             >
-              {statuses.map((status) => (
+              {[row.status, ...(row.allowedTransitions || [])].filter(Boolean).map((status) => (
                 <option key={status} value={status}>
                   {status}
                 </option>
@@ -150,23 +137,9 @@ export default function AdminOrdersPage() {
             </button>
             <button
               className="admin-action"
-              onClick={() =>
-                adminService
-                  .payment(row.id)
-                  .then(({ payment }) =>
-                    showToast(
-                      `${payment.Gateway || "Razorpay"} · ${payment.Status} · ${payment.TransactionReference || payment.RazorpayPaymentID || "Pending"}`,
-                    ),
-                  )
-              }
+              onClick={() => { const method = String(row.paymentMethod || '').toLowerCase(); const gateway = row.gateway || (method === 'cod' || method.includes('cash') ? 'Cash on Delivery' : 'Razorpay'); showToast(`${gateway} · ${row.paymentStatus || "Pending"} · ${row.transactionId || "Pending"}`); }}
             >
               View Payment
-            </button>
-            <button
-              className="admin-action"
-              onClick={() => adminService.requestRefund(row.id)}
-            >
-              Refund
             </button>
           </div>
         )}

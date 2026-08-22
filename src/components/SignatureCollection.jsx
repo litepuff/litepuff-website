@@ -12,6 +12,8 @@ import creamOnionImage from '../assets/images/products/cream-onion.png';
 import saltPepperImage from '../assets/images/products/salt-pepper.png';
 import { useProducts } from '../hooks/useProducts.js';
 import ProductPriceDisplay from './ProductPriceDisplay.jsx';
+import { useOffers } from '../hooks/useOffers.js';
+import { singleOfferPrice } from '../../shared/offerConfig.js';
 
 const products = [
   {
@@ -74,7 +76,7 @@ const ProductCard = memo(function ProductCard({ product, onAdd }) {
     <motion.article
       className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[28px] border border-[#E7E1D7] bg-[#FAF8F2] p-4 shadow-[0_8px_24px_rgba(36,48,41,0.05)] transition-[box-shadow,border-color] duration-300 hover:border-[#D7CEBF] hover:shadow-[0_16px_34px_rgba(36,48,41,0.10)] sm:p-5"
       variants={fadeUp}
-      whileHover={{ y: -6 }}
+      whileHover={{ y: -3 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
     >
       <div className="relative flex h-[240px] items-center justify-center sm:h-[260px] md:h-[230px] lg:h-[220px] xl:h-[240px]">
@@ -109,7 +111,7 @@ const ProductCard = memo(function ProductCard({ product, onAdd }) {
             {buttonState === 'added' ? <FiCheck aria-hidden="true" /> : <FiShoppingBag aria-hidden="true" />}
             {buttonState === 'adding' ? 'Adding...' : buttonState === 'added' ? 'Added ✓' : 'Add to Cart'}
           </button>
-          <Link to={`/products/${product.slug}`} className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#1E4D3A] text-sm font-semibold text-[#1E4D3A] transition-[transform,background-color,color] duration-300 hover:-translate-y-0.5 hover:bg-[#1E4D3A] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#C89B3C]" aria-label={`Quick view ${product.name}`}>Quick View</Link>
+          <Link to={`/products/${product.slug}`} className="group/link inline-flex h-11 w-full items-center justify-center rounded-full border border-[#1E4D3A] text-sm font-semibold text-[#1E4D3A] transition-[background-color,color] duration-300 hover:bg-[#1E4D3A] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#C89B3C]" aria-label={`View details for ${product.name}`}>View Details <span className="ml-2 transition-transform group-hover/link:translate-x-1" aria-hidden="true">→</span></Link>
         </div>
       </div>
     </motion.article>
@@ -120,9 +122,11 @@ export default function SignatureCollection() {
   const { addToCart } = useCart();
   const { showToast } = useToast();
   const { products: liveProducts } = useProducts();
+  const offers = useOffers();
   const displayProducts = products.map((product) => {
     const live = liveProducts.find((item) => item.id === product.id || item.slug === product.slug);
-    return live ? { ...product, ...live, image: live.image || product.image, originalPrice: Number(live.regularPrice || live.oldPrice || 249), weight: live.weight || product.weight } : { ...product, price: 211.65, originalPrice: 249 };
+    const mrp = Number(live?.regularPrice || live?.oldPrice || product.price);
+    return live ? { ...product, ...live, image: live.image || product.image, price: Number(live.price || singleOfferPrice(mrp, offers)), originalPrice: mrp, weight: live.weight || product.weight } : { ...product, price: singleOfferPrice(mrp, offers), originalPrice: mrp };
   });
 
   const handleAdd = (product) => {
@@ -134,14 +138,15 @@ export default function SignatureCollection() {
     <section className="bg-white py-12 md:py-16 lg:py-20" aria-labelledby="signature-collection-title">
       <div className="mx-auto max-w-[1500px] px-5 sm:px-6 lg:px-8">
         <motion.header className="mx-auto max-w-[720px] text-center" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={fadeUp}>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C89B3C]">Shop LitePuff</p>
-          <h2 id="signature-collection-title" className="mt-3 font-display text-[38px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[48px]">Customer Favourites</h2>
-          <p className="mx-auto mt-4 max-w-[620px] text-base leading-7 text-[#5F6762] md:text-lg">Five thoughtfully crafted roasted makhana flavours made with premium ingredients and bold seasonings for healthier everyday snacking.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#C89B3C]">Best Sellers</p>
+          <h2 id="signature-collection-title" className="mt-3 font-display text-[38px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[48px]">Pick Your Favourite Crunch</h2>
+          <p className="mx-auto mt-4 max-w-[620px] text-base leading-7 text-[#5F6762] md:text-lg">{displayProducts.length === 5 ? 'Five flavours. One seriously satisfying crunch.' : 'Explore our roasted makhana flavours.'}</p>
         </motion.header>
 
         <motion.div className="mt-9 grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-5 lg:gap-4 xl:gap-5" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.08 }} variants={productGrid}>
           {displayProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={handleAdd} />)}
         </motion.div>
+        <div className="mt-10 text-center"><Link to="/products" className="group inline-flex items-center text-sm font-bold text-[#1E4D3A]">Explore All Flavours <span className="ml-2 transition-transform group-hover:translate-x-1" aria-hidden="true">→</span></Link></div>
       </div>
     </section>
   );

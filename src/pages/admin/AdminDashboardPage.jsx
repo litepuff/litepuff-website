@@ -8,51 +8,48 @@ import { formatMoney } from "../../utils/formatMoney";
 export default function AdminDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     adminService
       .dashboard()
       .then(setData)
+      .catch(() => setError('Dashboard data could not be loaded. Please try again.'))
       .finally(() => setLoading(false));
   }, []);
 
   const metrics = data?.metrics || {};
   const stats = [
-    ["Total Revenue", formatMoney(metrics.totalRevenue || 0)],
-    ["Today's Revenue", formatMoney(metrics.todaysRevenue || 0)],
-    ["Today's Payments", metrics.todaysPayments || 0],
+    ["Realized Revenue", formatMoney(metrics.totalRevenue || 0), "Paid online and delivered COD orders"],
     ["Today's Orders", metrics.todaysOrders || 0],
-    ["Successful Payments", metrics.successfulPayments || 0],
-    ["Failed Payments", metrics.failedPayments || 0],
     ["Pending Payments", metrics.pendingPayments || 0],
-    ["Average Order Value", formatMoney(metrics.averageOrderValue || 0)],
     ["Total Orders", metrics.totalOrders || 0],
-    ["Pending Orders", metrics.pendingOrders || 0],
+    ["COD Orders", metrics.codOrders || 0],
     ["Delivered Orders", metrics.deliveredOrders || 0],
-    ["Cancelled Orders", metrics.cancelledOrders || 0],
-    ["Customers", metrics.totalCustomers || 0],
-    ["Products", metrics.products || 0],
-    ["Subscribers", metrics.newsletterSubscribers || 0],
-    ["Avg Rating", metrics.averageRating || 0],
+    ["Pending Shipments", metrics.pendingShipments || 0],
+    ["Low Stock", metrics.lowStockProducts || 0],
   ];
 
   return (
     <section className="grid gap-6">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.24em] text-brand-accent">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-accent">
           Dashboard
         </p>
-        <h1 className="font-display text-4xl font-black text-brand-text">
+        <h1 className="font-display text-3xl font-semibold text-brand-text sm:text-4xl">
           Business overview
         </h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {stats.map(([label, value]) => (
+      {error ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div> : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map(([label, value, hint]) => (
           <AdminStatCard
             key={label}
             label={label}
             value={loading ? "..." : value}
+            hint={hint}
           />
         ))}
       </div>
@@ -134,7 +131,7 @@ function ChartCard({ title, rows, labelKey, valueKey }) {
   const max = Math.max(...rows.map((row) => Number(row[valueKey] || 0)), 1);
   return (
     <article className="rounded-[24px] border border-brand-border bg-white p-5 shadow-sm">
-      <h2 className="font-display text-2xl font-black">{title}</h2>
+      <h2 className="font-display text-2xl font-semibold">{title}</h2>
       <div className="mt-5 grid gap-3">
         {rows.length ? (
           rows.map((row) => (

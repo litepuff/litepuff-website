@@ -9,7 +9,7 @@
     "dev:server": "nodemon server/server.js",
     "build": "vite build",
     "postinstall": "npm run build",
-    "test:server": "node --test server/tests/businessServices.test.js server/tests/authCore.test.js server/tests/emailAuth.test.js server/tests/whatsappAuth.test.js server/tests/whatsappInfrastructure.test.js server/tests/whatsappMessaging.test.js server/tests/whatsappIncoming.test.js server/tests/whatsappAdmin.test.js server/tests/accountManagement.test.js server/tests/authorization.test.js server/tests/googleCredentialProvider.test.js",
+    "test:server": "node --test server/tests/businessServices.test.js server/tests/authCore.test.js server/tests/emailAuth.test.js server/tests/whatsappAuth.test.js server/tests/whatsappInfrastructure.test.js server/tests/whatsappMessaging.test.js server/tests/whatsappIncoming.test.js server/tests/whatsappAdmin.test.js server/tests/accountManagement.test.js server/tests/authorization.test.js server/tests/googleCredentialProvider.test.js server/tests/orderReconciliation.test.js",
     "preview": "vite preview",
     "prestart": "npm run build",
     "start": "node server/index.js",
@@ -17,7 +17,8 @@
     "server:dev": "nodemon server/server.js",
     "sheets:sync": "node scripts/syncGoogleSheets.js",
     "sheets:verify": "node scripts/verifyGoogleSheetsCrud.js",
-    "sheets:verify-foundation": "node scripts/verifyGoogleSheetsFoundation.js"
+    "sheets:verify-foundation": "node scripts/verifyGoogleSheetsFoundation.js",
+    "orders:reconcile": "node scripts/reconcileOrders.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",

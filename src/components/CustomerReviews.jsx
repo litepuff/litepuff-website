@@ -1,43 +1,48 @@
-import { motion } from 'framer-motion';
-import { Flame, Package, Star, Users } from 'lucide-react';
-import avatarOne from '../assets/images/reviews/avatar-1.png';
-import avatarTwo from '../assets/images/reviews/avatar-2.png';
-import avatarThree from '../assets/images/reviews/avatar-3.png';
-
-const testimonials = [
-  { name: 'Priya Sharma', city: 'Delhi', review: 'Finally a healthy snack that actually tastes amazing. The Peri Peri flavour is my favourite.', avatar: avatarOne },
-  { name: 'Rahul Mehta', city: 'Bengaluru', review: 'Crispy, light and perfect for office breaks. Much better than regular fried snacks.', avatar: avatarTwo },
-  { name: 'Sneha Kapoor', city: 'Mumbai', review: 'The Cream & Onion flavour has become a family favourite. Fresh, crunchy and guilt-free.', avatar: avatarThree },
-];
-
-const statistics = [
-  { value: '4.8', label: 'Average Rating', icon: Star },
-  { value: '1000+', label: 'Happy Customers', icon: Users },
-  { value: '5', label: 'Signature Flavours', icon: Package },
-  { value: '100%', label: 'Roasted Goodness', icon: Flame },
-];
-
-const reveal = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } } };
-const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } };
+import { useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Image, Play, Star } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { reviewService } from '../services/reviewService';
+import { useProducts } from '../hooks/useProducts';
 
 export default function CustomerReviews() {
-  return (
-    <section className="bg-white px-6 py-12 md:py-16 lg:px-8 lg:py-20" aria-labelledby="customer-reviews-title">
-      <div className="mx-auto max-w-7xl">
-        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger} aria-label="LitePuff trust statistics">
-          {statistics.map(({ value, label, icon: Icon }) => <motion.article key={label} className="rounded-[22px] border border-[#E7E1D7] bg-[#FAF8F2] p-5 transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(36,48,41,0.06)]" variants={reveal}><div className="flex items-start justify-between gap-4"><div><p className="font-display text-[38px] font-semibold leading-none text-[#243029]">{value}</p><p className="mt-2 text-sm font-medium text-[#5F6762]">{label}</p></div><Icon className="h-6 w-6 text-[#C89B3C]" strokeWidth={1.5} aria-hidden="true" /></div></motion.article>)}
-        </motion.div>
+  const { products } = useProducts();
+  const reduceMotion = useReducedMotion();
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-        <motion.header className="mx-auto mt-12 max-w-[720px] text-center md:mt-16" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={reveal}>
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#C89B3C]">Customer Stories</p>
-          <h2 id="customer-reviews-title" className="mt-3 font-display text-[44px] font-semibold leading-none tracking-[-0.04em] text-[#243029] md:text-[48px]">Loved by Everyday Snackers</h2>
-          <p className="mx-auto mt-4 max-w-[620px] text-lg leading-8 text-[#5F6762] md:text-xl">Real feedback from customers who have made LitePuff part of their everyday routine.</p>
-        </motion.header>
+  useEffect(() => {
+    if (!products.length) return;
+    let current = true;
+    Promise.allSettled(products.map((product) => reviewService.list(product.id, { limit: 4, sort: 'helpful' }).then((result) => (result.reviews || []).map((review) => ({ ...review, productName: product.name })))))
+      .then((results) => { if (current) setReviews(results.flatMap((result) => result.status === 'fulfilled' ? result.value : []).slice(0, 8)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [products]);
 
-        <motion.div className="mt-9 grid gap-5 md:grid-cols-3" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.12 }} variants={stagger}>
-          {testimonials.map((testimonial) => <motion.article key={testimonial.name} className="flex h-full flex-col rounded-[26px] border border-[#E7E1D7] bg-white p-6 shadow-[0_8px_24px_rgba(36,48,41,0.035)] transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(36,48,41,0.07)]" variants={reveal}><div className="flex items-center gap-4"><img src={testimonial.avatar} alt={`${testimonial.name}, verified LitePuff customer`} className="h-14 w-14 rounded-full object-cover" loading="lazy" decoding="async" /><div><h3 className="font-display text-[23px] font-semibold leading-tight text-[#243029]">{testimonial.name}</h3><p className="text-sm text-[#68706B]">{testimonial.city}</p></div></div><div className="mt-5 flex text-[#C89B3C]" aria-label="5 out of 5 stars">{Array.from({ length: 5 }, (_, index) => <Star key={index} className="h-4 w-4 fill-current" aria-hidden="true" />)}</div><blockquote className="mt-4 flex-1 text-base leading-7 text-[#4E5550]">&ldquo;{testimonial.review}&rdquo;</blockquote><p className="mt-6 inline-flex w-fit items-center rounded-full bg-[#EEF3EE] px-3 py-1.5 text-xs font-semibold text-[#1E4D3A]">✓ Verified Purchase</p></motion.article>)}
-        </motion.div>
-      </div>
-    </section>
-  );
+  const average = useMemo(() => reviews.length ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length : 0, [reviews]);
+  return <section className="bg-[#FAF8F2] px-5 py-14 sm:px-6 md:py-20 lg:px-10" aria-labelledby="customer-reviews-title">
+    <div className="mx-auto max-w-7xl">
+      <motion.header className="max-w-3xl" initial={reduceMotion ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: .4 }}>
+        <p className="text-xs font-bold uppercase tracking-[.28em] text-[#A97826]">Customer Love</p>
+        <h2 id="customer-reviews-title" className="mt-3 font-display text-[40px] font-semibold leading-none tracking-[-.035em] text-[#243029] sm:text-5xl">Good snacks. Great reactions.</h2>
+        <p className="mt-4 max-w-xl text-base leading-7 text-[#606862]">See why snack lovers are making LitePuff part of their everyday cravings.</p>
+        {reviews.length > 0 && <div className="mt-4 flex items-center gap-3"><div className="flex text-[#C89B3C]" aria-label={`${average.toFixed(1)} out of 5 stars`}>{Array.from({ length: 5 }, (_, index) => <Star key={index} size={18} className={index < Math.round(average) ? 'fill-current' : ''} aria-hidden="true" />)}</div><span className="text-sm font-semibold text-[#4E5550]">{average.toFixed(1)} from published reviews</span></div>}
+      </motion.header>
+      {loading ? <div className="mt-8 flex gap-4 overflow-hidden" aria-label="Loading customer reviews">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-80 min-w-[82%] animate-pulse rounded-[22px] bg-white sm:min-w-[360px]" />)}</div> : reviews.length ? <div className="scrollbar-hidden mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3">{reviews.map((review, index) => <ReviewCard key={review.id || index} review={review} reduceMotion={reduceMotion} />)}</div> : <EmptyReviews />}
+      <Link to="/products" className="mt-7 inline-flex border-b border-[#1E4D3A] pb-1 text-sm font-bold text-[#1E4D3A]">Read All Reviews →</Link>
+    </div>
+  </section>;
+}
+
+function ReviewCard({ review, reduceMotion }) {
+  const image = review.images?.[0]?.thumbnail || review.images?.[0]?.url || review.customerPhoto;
+  return <motion.article className="min-w-[84%] snap-start overflow-hidden border-y border-[#DCD3C5] bg-transparent sm:min-w-[360px] lg:min-w-[390px]" initial={reduceMotion ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: .25 }}>
+    {(image || review.video) && <div className="relative aspect-[4/3] overflow-hidden bg-[#F0EBE2]">{image ? <img src={image} alt="Customer-submitted LitePuff review" className="h-full w-full object-cover" loading="lazy" /> : <video src={review.video} className="h-full w-full object-cover" preload="metadata" aria-label="Customer-submitted LitePuff review video" />} {review.video && <span className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-white text-[#1E4D3A]"><Play size={17} fill="currentColor" aria-hidden="true" /></span>}</div>}
+    <div className="p-5"><div className="flex text-[#C89B3C]" aria-label={`${review.rating} out of 5 stars`}>{Array.from({ length: 5 }, (_, index) => <Star key={index} size={15} className={index < Number(review.rating) ? 'fill-current' : ''} aria-hidden="true" />)}</div>{review.title && <h3 className="mt-3 font-display text-2xl font-semibold text-[#243029]">{review.title}</h3>}<p className="mt-2 line-clamp-4 text-sm leading-6 text-[#56605A]">{review.review}</p><div className="mt-5 border-t border-[#EEE8DE] pt-4">{review.customerName && <p className="text-sm font-bold text-[#243029]">{review.customerName}</p>}<p className="mt-0.5 text-xs text-[#747B76]">{review.productName}</p></div></div>
+  </motion.article>;
+}
+
+function EmptyReviews() {
+  return <div className="mt-8 grid gap-4 sm:grid-cols-3" aria-label="Customer review content awaiting publication">{Array.from({ length: 3 }, (_, index) => <div key={index} className="grid min-h-56 place-items-center rounded-[22px] border border-dashed border-[#CEC5B7] bg-white p-6 text-center"><div><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#F3EFE7] text-[#1E4D3A]"><Image size={19} aria-hidden="true" /></span><p className="mt-4 text-sm font-bold text-[#243029]">Customer story slot</p><p className="mt-1 text-xs leading-5 text-[#747B76]">Approved customer photos, videos and reviews will appear here.</p></div></div>)}</div>;
 }

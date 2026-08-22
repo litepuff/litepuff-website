@@ -37,6 +37,16 @@ export default function AdminAnalyticsPage() {
         <AdminStatCard label="Customers" value={metrics.totalCustomers || 0} />
         <AdminStatCard label="Average Rating" value={metrics.averageRating || 0} />
       </div>
+      <section className="rounded-2xl border border-brand-border bg-white p-5 sm:p-6" aria-labelledby="meta-health-title">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-accent">Meta tracking health</p>
+        <h2 id="meta-health-title" className="mt-2 font-display text-2xl font-semibold">Conversion infrastructure</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <HealthItem label="Browser Pixel" value={import.meta.env.VITE_META_PIXEL_ID ? 'Configured' : 'Not configured in this build'} />
+          <HealthItem label="Conversions API" value="Server-managed" />
+          <HealthItem label="Meta Ads reporting" value="Not connected" />
+        </div>
+        <p className="mt-5 max-w-3xl text-sm leading-6 text-brand-muted">Event delivery is handled by the existing Pixel and server-side purchase queue. Ads spend, ROAS and campaign reporting are not available because the Meta reporting API is not connected.</p>
+      </section>
       <div className="grid gap-6 lg:grid-cols-2">
         <Insight title="Revenue by Month" rows={charts.revenueByMonth || []} valueKey="revenue" labelKey="month" />
         <Insight title="Orders by Status" rows={charts.ordersByStatus || []} valueKey="count" labelKey="status" />
@@ -45,6 +55,10 @@ export default function AdminAnalyticsPage() {
       </div>
     </section>
   );
+}
+
+function HealthItem({ label, value }) {
+  return <div className="border-l-2 border-brand-accent/60 pl-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-muted">{label}</p><p className="mt-1 text-sm font-semibold text-brand-text">{value}</p></div>;
 }
 
 function Insight({ title, rows, labelKey, valueKey }) {

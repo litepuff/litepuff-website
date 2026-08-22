@@ -18,7 +18,7 @@ const STATUS_MAP = new Map([
   ['ndr', { shipment: 'NDR' }],
   ['ndr raised', { shipment: 'NDR' }],
   ['rto initiated', { shipment: 'RTO Initiated', order: 'Returned' }],
-  ['rto delivered', { shipment: 'RTO Delivered', order: 'Returned', delivery: true }],
+  ['rto delivered', { shipment: 'RTO Delivered', order: 'Returned' }],
 ]);
 
 const ORDER_RANK = new Map([

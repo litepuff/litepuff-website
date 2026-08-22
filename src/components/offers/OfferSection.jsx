@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiCheck, FiMinus, FiPlus, FiX } from 'react-icons/fi';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { comboAssets } from '../../config/comboAssets.js';
 import { useCart } from '../../context/CartContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useOffers } from '../../hooks/useOffers.js';
 import { formatMoney } from '../../utils/formatMoney.js';
 import { getLocalProductImage, getProductImage } from '../../utils/productImage.js';
+import ComboProductImage from '../ComboProductImage.jsx';
 
 function OfferCard({ badge, title, price, detail, action, featured = false }) {
   return <article className={`relative rounded-[28px] border bg-white p-6 ${featured ? 'border-[#C9A227] shadow-[0_14px_36px_rgba(36,48,41,.08)]' : 'border-[#E7E1D7]'}`}>
@@ -32,6 +32,7 @@ export default function OfferSection({ products = [], compact = false, showCards
   const available = useMemo(() => products.filter((product) => String(product.status || 'active').toLowerCase() === 'active' && Number(product.stock || 0) > 0), [products]);
   const offer = builder ? offers[builder === 'COMBO_2' ? 'combo2' : 'combo3'] : null;
   const selectedCount = Object.values(selected).reduce((sum, value) => sum + value, 0);
+  const selectedProducts = useMemo(() => Object.entries(selected).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ ...available.find((item) => item.id === productId), productId, quantity })), [available, selected]);
   const change = (id, delta) => setSelected((current) => {
     const next = Math.max(0, (current[id] || 0) + delta);
     if (delta > 0 && selectedCount >= offer.requiredItems) return current;
@@ -71,7 +72,7 @@ export default function OfferSection({ products = [], compact = false, showCards
     <AnimatePresence>{builder && <motion.div className="fixed inset-0 z-[120] grid place-items-end bg-[#14251D]/45 backdrop-blur-[2px] md:place-items-center md:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? 0 : .18 }} onMouseDown={(event) => event.target === event.currentTarget && setBuilder(null)}>
       <motion.div ref={dialogRef} tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="combo-builder-title" className="flex max-h-[94svh] w-full flex-col overflow-hidden rounded-t-[26px] bg-[#FAF8F2] outline-none md:max-h-[86vh] md:max-w-[820px] md:rounded-[26px]" initial={reduceMotion ? false : { opacity: 0, y: 28, scale: .985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: .99 }} transition={{ duration: reduceMotion ? 0 : .22, ease: 'easeOut' }}>
         <header className="grid grid-cols-[72px_1fr_auto] items-center gap-3 border-b border-[#E7E1D7] bg-white px-4 py-3 sm:grid-cols-[88px_1fr_auto] sm:px-5">
-          <div className="h-[62px] overflow-hidden rounded-[14px] bg-[#F4EBD9] p-1"><img src={comboAssets[builder]} alt="" className="h-full w-full object-contain" /></div>
+          <ComboProductImage selectedProducts={selectedProducts} comboSize={offer.requiredItems} className="h-[62px] rounded-[14px]" />
           <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.16em] text-[#A76525]">BUY {offer.requiredItems} · {formatMoney(offer.price)}</p><h2 id="combo-builder-title" className="mt-1 font-display text-[24px] font-semibold leading-none text-[#243029] sm:text-[30px]">Build Your {offer.requiredItems}-Product Combo</h2><p className="mt-1 hidden text-xs text-[#65706A] sm:block">Choose your flavours. Duplicate flavours are welcome.</p></div>
           <button type="button" onClick={() => setBuilder(null)} className="grid h-10 w-10 place-items-center rounded-full bg-[#F3EFE6] text-[#243029] transition hover:bg-[#E9E2D7]" aria-label="Close combo builder"><FiX /></button>
         </header>
@@ -79,6 +80,7 @@ export default function OfferSection({ products = [], compact = false, showCards
           <p className="text-sm font-bold text-[#1F5E3B]">Selected: {selectedCount} / {offer.requiredItems}</p>
           <div className="flex gap-1" aria-hidden="true">{Array.from({ length: offer.requiredItems }, (_, index) => <span key={index} className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${index < selectedCount ? 'bg-[#1F5E3B]' : 'bg-[#DDD7CC]'}`} />)}</div>
         </div>
+        <div className="px-4 pb-4 sm:px-5"><ComboProductImage selectedProducts={selectedProducts} comboSize={offer.requiredItems} className="h-[190px] rounded-[20px] sm:h-[230px]" /></div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5">
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{available.map((product) => {
             const quantity = selected[product.id] || 0;
@@ -93,7 +95,7 @@ export default function OfferSection({ products = [], compact = false, showCards
           })}</div>
         </div>
         <footer className="border-t border-[#E7E1D7] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:flex sm:items-center sm:gap-4 sm:px-5 sm:pb-4">
-          <div className="flex items-center justify-between sm:min-w-[190px] sm:block"><strong className="font-display text-2xl font-semibold text-[#243029]">{formatMoney(offer.price)}</strong><p className="text-[10px] font-black uppercase tracking-[.12em] text-[#1F5E3B]"><FiCheck className="mr-1 inline" />Free delivery</p></div>
+          <div className="sm:min-w-[230px]"><div className="flex items-center justify-between sm:block"><strong className="font-display text-2xl font-semibold text-[#243029]">BUY {offer.requiredItems} · {formatMoney(offer.price)}</strong><p className="text-[10px] font-black uppercase tracking-[.12em] text-[#1F5E3B]"><FiCheck className="mr-1 inline" />Free delivery</p></div>{selectedProducts.length > 0 && <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#65706A]">{selectedProducts.map((item) => `${item.name} × ${item.quantity}`).join(' · ')}</p>}</div>
           <div className="mt-2 flex-1 sm:mt-0"><button type="button" disabled={selectedCount !== offer.requiredItems} onClick={add} className="h-12 w-full rounded-full bg-[#1F5E3B] px-7 text-sm font-bold text-white transition duration-200 hover:bg-[#174A2F] disabled:cursor-not-allowed disabled:bg-[#C9C6BE]">Add to Bag</button>{selectedCount !== offer.requiredItems && <p className="mt-1.5 text-center text-[11px] text-[#7B6E61]">Choose {offer.requiredItems - selectedCount} more {offer.requiredItems - selectedCount === 1 ? 'flavour' : 'flavours'} to continue.</p>}</div>
         </footer>
       </motion.div>

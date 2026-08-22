@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import sharp from 'sharp';
 import { appendRow, deleteRow, getRows, updateRow } from '../services/googleSheets.js';
 import { createId } from '../utils/createId.js';
@@ -26,6 +27,17 @@ const reviewById = async (id) => {
   if (!row) throw new AppError('Review not found.', { status: 404, code: 'REVIEW_NOT_FOUND' });
   return row;
 };
+
+export function findEligibleReviewOrder({ orders = [], items = [], customerId, productId }) {
+  return orders.find((candidate) =>
+    candidate.CustomerID === customerId
+    && completedStatuses.has(normalize(candidate.OrderStatus))
+    && items.some((item) =>
+      item.OrderID === candidate.OrderID
+      && normalize(item.ProductID) === normalize(productId)
+    )
+  ) || null;
+}
 const publicReview = (row, replies = []) => ({
   id: row.reviewId, productId: row.productId, customerId: row.customerId,
   customerName: row.customerName || 'LitePuff customer', customerPhoto: row.customerPhoto || '',
@@ -152,11 +164,52 @@ export async function getOwnProductReviews(request, response) {
 }
 
 async function optimizeImages(files = []) {
-  return Promise.all(files.map(async (file) => {
-    const thumbnail = `${path.parse(file.path).name}-thumb.webp`;
-    await sharp(file.path).rotate().resize({ width: 360, height: 360, fit: 'cover' }).webp({ quality: 78 }).toFile(path.join(path.dirname(file.path), thumbnail));
-    return { url: `/uploads/reviews/${file.filename}`, thumbnail: `/uploads/reviews/${thumbnail}` };
-  }));
+  const directory = path.resolve('server/uploads/reviews');
+  await fs.promises.mkdir(directory, { recursive: true });
+  const written = [];
+  try {
+    return await Promise.all(files.map(async (file) => {
+      if (!file.buffer || file.size > 8 * 1024 * 1024) throw new AppError('Each review image must be 8 MB or smaller.', { status: 422, code: 'REVIEW_IMAGE_INVALID' });
+      let metadata;
+      try { metadata = await sharp(file.buffer, { failOn: 'error', limitInputPixels: 40_000_000 }).metadata(); }
+      catch { throw new AppError('One of the review images is corrupted or unsupported.', { status: 422, code: 'REVIEW_IMAGE_INVALID' }); }
+      if (!['jpeg', 'png', 'webp'].includes(metadata.format) || !metadata.width || !metadata.height || metadata.width * metadata.height > 40_000_000) throw new AppError('Review images must be valid JPG, PNG, or WEBP files up to 40 megapixels.', { status: 422, code: 'REVIEW_IMAGE_INVALID' });
+      const name = `${createId('review-image')}.webp`;
+      const thumbnail = `${path.parse(name).name}-thumb.webp`;
+      const originalPath = path.join(directory, name);
+      const thumbnailPath = path.join(directory, thumbnail);
+      await sharp(file.buffer).rotate().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toFile(originalPath);
+      written.push(originalPath);
+      await sharp(file.buffer).rotate().resize({ width: 360, height: 360, fit: 'cover' }).webp({ quality: 76 }).toFile(thumbnailPath);
+      written.push(thumbnailPath);
+      return { url: `/uploads/reviews/${name}`, thumbnail: `/uploads/reviews/${thumbnail}` };
+    }));
+  } catch (error) {
+    await Promise.all(written.map((file) => fs.promises.unlink(file).catch(() => {})));
+    throw error;
+  }
+}
+
+export async function inspectReviewImage(buffer) {
+  let metadata;
+  try { metadata = await sharp(buffer, { failOn: 'error', limitInputPixels: 40_000_000 }).metadata(); }
+  catch { throw new AppError('One of the review images is corrupted or unsupported.', { status: 422, code: 'REVIEW_IMAGE_INVALID' }); }
+  if (!['jpeg', 'png', 'webp'].includes(metadata.format) || !metadata.width || !metadata.height || metadata.width * metadata.height > 40_000_000) throw new AppError('Review images must be valid JPG, PNG, or WEBP files up to 40 megapixels.', { status: 422, code: 'REVIEW_IMAGE_INVALID' });
+  return metadata;
+}
+
+export function isMp4ReviewVideo(buffer) {
+  return Boolean(buffer?.length >= 12 && buffer.subarray(4, 12).toString('ascii').startsWith('ftyp'));
+}
+
+async function persistVideo(file) {
+  if (!file) return '';
+  if (!file.buffer || file.size > 25 * 1024 * 1024 || !isMp4ReviewVideo(file.buffer)) throw new AppError('Review video must be a valid MP4 file up to 25 MB.', { status: 422, code: 'REVIEW_VIDEO_INVALID' });
+  const directory = path.resolve('server/uploads/reviews');
+  await fs.promises.mkdir(directory, { recursive: true });
+  const name = `${createId('review-video')}.mp4`;
+  await fs.promises.writeFile(path.join(directory, name), file.buffer, { flag: 'wx' });
+  return `/uploads/reviews/${name}`;
 }
 
 export async function createProductReview(request, response) {
@@ -164,21 +217,29 @@ export async function createProductReview(request, response) {
   const existing = (await getRows(REVIEW_SHEET)).find((row) => row.customerId === customerId && row.productId === request.params.id);
   if (existing) throw new AppError('You have already reviewed this product.', { status: 409, code: 'DUPLICATE_REVIEW' });
   const [orders, items] = await Promise.all([getRows('ORDERS'), getRows('ORDER_ITEMS')]);
-  const order = orders.find((candidate) => candidate.CustomerID === customerId && completedStatuses.has(String(candidate.OrderStatus).toLowerCase()) && items.some((item) => item.OrderID === candidate.OrderID && item.ProductID === request.params.id));
+  const order = findEligibleReviewOrder({ orders, items, customerId, productId: request.params.id });
+  if (!order) throw new AppError('Only customers with a delivered order can review this product.', { status: 403, code: 'REVIEW_NOT_ELIGIBLE' });
+  const title = String(request.body.title || '').slice(0, 120);
+  const review = String(request.body.review || '').slice(0, 3000);
+  if (!title || review.length < 10) throw new AppError('A title and review of at least 10 characters are required.', { status: 422, code: 'VALIDATION_ERROR' });
+  const ratings = Object.fromEntries(['rating', 'tasteRating', 'freshnessRating', 'packagingRating', 'valueRating', 'crunchinessRating'].map((field) => [field, rating(request.body[field], field)]));
+  const images = await optimizeImages(request.files?.images);
+  let video = '';
+  try { video = await persistVideo(request.files?.video?.[0]); }
+  catch (error) {
+    await Promise.all(images.flatMap((image) => [image.url, image.thumbnail]).map((url) => fs.promises.unlink(path.resolve('server', url.replace(/^\//, ''))).catch(() => {})));
+    throw error;
+  }
   const now = new Date().toISOString();
   const row = {
     reviewId: createId('review'), productId: request.params.id, orderId: order?.OrderID || '', customerId,
     customerName: `${request.customerRecord.FirstName || ''} ${request.customerRecord.LastName || ''}`.trim(),
-    customerPhoto: request.customerRecord.ProfileImage || '', rating: rating(request.body.rating),
-    tasteRating: rating(request.body.tasteRating, 'tasteRating'), freshnessRating: rating(request.body.freshnessRating, 'freshnessRating'),
-    packagingRating: rating(request.body.packagingRating, 'packagingRating'), valueRating: rating(request.body.valueRating, 'valueRating'),
-    crunchinessRating: rating(request.body.crunchinessRating, 'crunchinessRating'),
-    title: String(request.body.title || '').slice(0, 120), review: String(request.body.review || '').slice(0, 3000),
-    images: JSON.stringify(await optimizeImages(request.files?.images)), video: request.files?.video?.[0] ? `/uploads/reviews/${request.files.video[0].filename}` : '',
-    verifiedPurchase: Boolean(order), helpfulCount: 0, status: 'pending', featured: false, createdAt: now, updatedAt: now,
+    customerPhoto: request.customerRecord.ProfileImage || '', ...ratings,
+    title, review,
+    images: JSON.stringify(images), video,
+    verifiedPurchase: true, helpfulCount: 0, status: 'pending', featured: false, createdAt: now, updatedAt: now,
     approvedBy: '', approvedAt: '', rejectedReason: '', hidden: false, deleted: false, spam: false, adminReply: '', adminReplyDate: ''
   };
-  if (!row.title || row.review.length < 10) throw new AppError('A title and review of at least 10 characters are required.', { status: 422, code: 'VALIDATION_ERROR' });
   await appendRow(REVIEW_SHEET, row);
   notificationService.createWebsite({
     customerId: 'admin',

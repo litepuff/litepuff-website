@@ -55,6 +55,10 @@ export async function fetchRazorpayPayment(paymentId) {
   return withGatewayTimeout(gateway().payments.fetch(paymentId));
 }
 
+export async function fetchRazorpayOrderPayments(orderId) {
+  return withGatewayTimeout(gateway().orders.fetchPayments(orderId));
+}
+
 export function publicGatewayConfig() {
   gateway();
   return { keyId: env.razorpayKeyId, gateway: 'Razorpay', mode: env.razorpayMode };

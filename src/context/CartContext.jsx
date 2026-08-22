@@ -4,6 +4,7 @@ import { useCustomerAuth } from './CustomerAuthContext';
 import { siteConfig } from '../utils/siteConfig.js';
 import useMetaTracking from '../analytics/useMetaTracking.js';
 import { DEFAULT_OFFER_CONFIG } from '../../shared/offerConfig.js';
+import { comboCartId } from '../utils/comboCart.js';
 
 const CartContext = createContext(null);
 const normalizePrice = (item) => ({
@@ -70,8 +71,11 @@ export function CartProvider({ children }) {
   }
 
   function addComboToCart(combo) {
-    const id = combo.id || `combo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    saveCart([...cartItems, { ...combo, id, type: 'combo', quantity: 1 }]);
+    const id = combo.id || comboCartId(combo);
+    const existing = cartItems.find((item) => item.id === id);
+    saveCart(existing
+      ? cartItems.map((item) => item.id === id ? { ...item, quantity: item.quantity + 1 } : item)
+      : [...cartItems, { ...normalizePrice(combo), id, type: 'combo', quantity: 1 }]);
   }
 
   function clearCart() {
@@ -81,8 +85,8 @@ export function CartProvider({ children }) {
     }
   }
 
-  const cartTotal = cartItems.reduce((total, item) => total + item.price * (item.type === 'combo' ? 1 : item.quantity), 0);
-  const cartCount = cartItems.reduce((total, item) => total + (item.type === 'combo' ? item.items.reduce((sum, part) => sum + part.quantity, 0) : item.quantity), 0);
+  const cartTotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+  const cartCount = cartItems.reduce((total, item) => total + (item.type === 'combo' ? item.items.reduce((sum, part) => sum + part.quantity, 0) * item.quantity : item.quantity), 0);
 
   const value = useMemo(() => ({
     cartItems,

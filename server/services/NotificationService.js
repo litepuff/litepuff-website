@@ -33,6 +33,10 @@ function notificationRecord(input) {
 }
 
 export class NotificationService {
+  constructor({ reviewNotificationStore = { getRows, appendRow } } = {}) {
+    this.reviewNotificationStore = reviewNotificationStore;
+  }
+
   async createWebsite(input) {
     if (!input.customerId) return { skipped: true };
     const record = notificationRecord({ ...input, channel: 'website', status: 'unread' });
@@ -96,6 +100,30 @@ export class NotificationService {
     }
   }
 
+  async requestReview(order) {
+    if (!order?.CustomerID || !order?.OrderID || String(order.OrderStatus || '').toLowerCase() !== 'delivered') return { skipped: true };
+    const existing = (await this.reviewNotificationStore.getRows('NOTIFICATIONS')).find((row) =>
+      row.Channel === 'website'
+      && row.CustomerID === order.CustomerID
+      && row.OrderID === order.OrderID
+      && row.Type === 'review_request'
+    );
+    if (existing) return { skipped: true, duplicate: true, notification: existing };
+    const record = notificationRecord({
+      customerId: order.CustomerID,
+      orderId: order.OrderID,
+      channel: 'website',
+      status: 'unread',
+      type: 'review_request',
+      title: 'How did you like your LitePuff?',
+      message: 'Your order has been delivered. Share your experience with a product review.',
+      deepLink: `/orders/${order.OrderID}`,
+      metadata: { eligibility: 'delivered_order' }
+    });
+    await this.reviewNotificationStore.appendRow('NOTIFICATIONS', record);
+    return record;
+  }
+
   async sendWhatsApp({ to, template, variables, customerId = '', orderId = '', type = 'transactional', correlationId }) {
     if (!to || !whatsAppConfig.outboundConfigured) {
       logger.info('notification.whatsapp.skipped', { correlationId, customerId, orderId, type, reason: !to ? 'recipient_missing' : 'configuration_incomplete' });
@@ -137,13 +165,14 @@ export class NotificationService {
     const type = `order_${String(status).toLowerCase().replaceAll(' ', '_')}`;
     const message = `Order ${order.OrderNumber || order.OrderID} is now ${status}.`;
     const tasks = [
-      this.createWebsite({ customerId: order.CustomerID, orderId: order.OrderID, type, title: `Order ${status}`, message, deepLink: `/account/orders/${order.OrderID}` })
+      this.createWebsite({ customerId: order.CustomerID, orderId: order.OrderID, type, title: `Order ${status}`, message, deepLink: `/orders/${order.OrderID}` })
     ];
     if (customer?.Email) tasks.push(this.sendEmail({ to: customer.Email, template: emailTemplates.orderStatus(order, status), customerId: order.CustomerID, orderId: order.OrderID, type }));
     const normalizedStatus = String(status || '').toLowerCase();
     if (customer?.Phone && normalizedStatus === 'confirmed') tasks.push(this.sendWhatsApp({ to: customer.Phone, template: WHATSAPP_TEMPLATES.ORDER_CONFIRMATION, variables: { orderNumber: order.OrderNumber || order.OrderID, total: order.GrandTotal }, customerId: order.CustomerID, orderId: order.OrderID, type }));
     if (customer?.Phone && ['shipped', 'in transit', 'out for delivery'].includes(normalizedStatus) && order.TrackingURL) tasks.push(this.sendWhatsApp({ to: customer.Phone, template: WHATSAPP_TEMPLATES.ORDER_SHIPPED, variables: { orderNumber: order.OrderNumber || order.OrderID, status, trackingUrl: order.TrackingURL }, customerId: order.CustomerID, orderId: order.OrderID, type }));
     if (customer?.Phone && normalizedStatus === 'delivered') tasks.push(this.sendWhatsApp({ to: customer.Phone, template: WHATSAPP_TEMPLATES.DELIVERED, variables: { orderNumber: order.OrderNumber || order.OrderID }, customerId: order.CustomerID, orderId: order.OrderID, type }));
+    if (normalizedStatus === 'delivered') tasks.push(this.requestReview(order));
     return Promise.allSettled(tasks);
   }
 }

@@ -223,7 +223,6 @@ export async function syncGoogleSheetsSchema() {
           if (header === 'Provider') return String(record.GoogleAuth).toLowerCase() === 'true' ? 'Google' : 'Password';
           return record[header] ?? '';
         }));
-        await request(`/values/${encodeURIComponent(`${title}!A:ZZ`)}:clear`, { method: 'POST', body: '{}' });
         await writeValues(`${title}!A1`, [headers, ...migrated]);
         invalidate(title);
         continue;
@@ -242,7 +241,6 @@ export async function syncGoogleSheetsSchema() {
       if (invalid && title === 'CUSTOMERS' && currentHeaders.includes('CustomerID')) {
         const records = values.slice(1).map((row) => Object.fromEntries(currentHeaders.map((header, index) => [header, row[index] ?? ''])));
         const migrated = records.map((record) => headers.map((header) => record[header] ?? (header === 'MarketingConsent' ? 'false' : '')));
-        await request(`/values/${encodeURIComponent(`${title}!A:ZZ`)}:clear`, { method: 'POST', body: '{}' });
         await writeValues(`${title}!A1`, [headers, ...migrated]);
         invalidate(title);
         continue;
@@ -276,7 +274,6 @@ export async function synchronizeGoogleSheets({ removeUnused = false } = {}) {
       return currentHeaders.findIndex((current) => candidates.includes(current));
     });
     const normalizedRows = values.slice(1).map((row) => indexes.map((index) => index >= 0 ? row[index] ?? '' : ''));
-    await request(`/values/${encodeURIComponent(`${title}!A:ZZ`)}:clear`, { method: 'POST', body: '{}' });
     await writeValues(`${title}!A1`, [headers, ...normalizedRows]);
     invalidate(title);
   }
@@ -418,6 +415,23 @@ export async function appendRow(sheetName, record) {
     cacheAppend(sheetName, record, result?.updates?.updatedRange);
     return result;
   });
+}
+
+// Reads the current worksheet exactly as-is. Unlike getRows(), this never
+// creates sheets or extends/migrates headers, so audit and dry-run tooling can
+// guarantee that it does not mutate production data or schema.
+export async function getRowsReadOnly(sheetName) {
+  if (!SHEETS[sheetName]) throw new Error(`Unknown Google Sheet: ${sheetName}`);
+  requireConfig();
+  const values = await rawValues(`${sheetName}!A:ZZ`);
+  if (!values.length) return [];
+  const headers = values[0].map((current) => (
+    SHEETS[sheetName].find((header) => header === current || COLUMN_ALIASES[sheetName]?.[header]?.includes(current)) || current
+  ));
+  return values.slice(1).map((row, index) => ({
+    _row: index + 2,
+    ...Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ''])),
+  }));
 }
 
 export async function updateRow(sheetName, rowNumber, record) {
